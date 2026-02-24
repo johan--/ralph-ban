@@ -26,15 +26,11 @@ func newDetail(issue *beadslite.Issue, colIdx columnIndex) detail {
 }
 
 func (d detail) Update(msg tea.Msg) (detail, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		d.width = msg.Width
-		d.height = msg.Height
-	case tea.KeyMsg:
-		// esc handled by board (closes detail mode)
-		// e handled by board (switches to edit mode)
-		_ = msg
-	}
+	// Resize, refresh, errMsg, and suspend are handled centrally by
+	// board.Update before overlay routing. Key events (esc, e) are
+	// handled by board.updateDetail. Nothing reaches here that this
+	// model needs to act on, but the signature satisfies the contract
+	// for future extension.
 	return d, nil
 }
 

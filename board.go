@@ -6,6 +6,7 @@ import (
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -89,6 +90,16 @@ func (b *board) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case errMsg:
 		b.err = msg.err
 		return b, nil
+
+	case tea.ResumeMsg:
+		// Returning from ctrl+z suspend. Re-fire a refresh so the
+		// board picks up any changes made while backgrounded.
+		return b, b.loadFromStore()
+
+	case tea.KeyMsg:
+		if key.Matches(msg, keys.Suspend) {
+			return b, tea.Suspend
+		}
 	}
 
 	// Overlay-specific routing
@@ -146,14 +157,7 @@ func (b *board) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			b.help.ShowAll = !b.help.ShowAll
 			return b, nil
 
-		case key.Matches(msg, keys.Suspend):
-			return b, tea.Suspend
 		}
-
-	case tea.ResumeMsg:
-		// Returning from ctrl+z suspend. Re-fire a refresh so the
-		// board picks up any changes made while backgrounded.
-		return b, b.loadFromStore()
 	}
 
 	// Forward remaining messages to the focused column
@@ -576,7 +580,5 @@ func (b *board) positionIndicator() string {
 
 // textinputBlink returns a command to start the text input cursor blinking.
 func textinputBlink() tea.Cmd {
-	return func() tea.Msg {
-		return nil
-	}
+	return textinput.Blink
 }
