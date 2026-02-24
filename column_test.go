@@ -78,6 +78,28 @@ func TestNumColumns(t *testing.T) {
 	}
 }
 
+func TestNewColumnStartsBlurred(t *testing.T) {
+	c := newColumn(colTodo)
+
+	if c.Focused() {
+		t.Error("newColumn should start blurred (not focused)")
+	}
+}
+
+func TestFocusBlurSwapsDelegate(t *testing.T) {
+	c := newColumn(colDoing)
+
+	c.Focus()
+	if !c.Focused() {
+		t.Error("Focus() should set focused state")
+	}
+
+	c.Blur()
+	if c.Focused() {
+		t.Error("Blur() should clear focused state")
+	}
+}
+
 func TestConfirmDeleteResetsOnBlur(t *testing.T) {
 	c := newColumn(colTodo)
 	c.Focus()

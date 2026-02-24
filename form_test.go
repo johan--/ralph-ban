@@ -100,6 +100,51 @@ func TestAdvanceFocusBlursTextComponents(t *testing.T) {
 	}
 }
 
+func TestSubmitNewIncludesDescription(t *testing.T) {
+	f := newForm(colTodo)
+	f.title.SetValue("New task")
+	f.description.SetValue("detailed explanation")
+
+	cmd := f.submit()
+	if cmd == nil {
+		t.Fatal("submit should return a command")
+	}
+
+	msg := cmd()
+	sm, ok := msg.(saveMsg)
+	if !ok {
+		t.Fatalf("submit returned %T, want saveMsg", msg)
+	}
+	if sm.issue.Description != "detailed explanation" {
+		t.Errorf("description = %q, want %q", sm.issue.Description, "detailed explanation")
+	}
+	if sm.issue.Title != "New task" {
+		t.Errorf("title = %q, want %q", sm.issue.Title, "New task")
+	}
+}
+
+func TestSubmitEditIncludesDescription(t *testing.T) {
+	issue := beadslite.NewIssue("original")
+	issue.Description = "old desc"
+
+	f := editForm(issue, colDoing)
+	f.description.SetValue("updated desc")
+
+	cmd := f.submit()
+	if cmd == nil {
+		t.Fatal("submit should return a command")
+	}
+
+	msg := cmd()
+	sm, ok := msg.(saveMsg)
+	if !ok {
+		t.Fatalf("submit returned %T, want saveMsg", msg)
+	}
+	if sm.issue.Description != "updated desc" {
+		t.Errorf("description = %q, want %q", sm.issue.Description, "updated desc")
+	}
+}
+
 func TestPriorityBounds(t *testing.T) {
 	f := newForm(colTodo)
 	f.priority = 0

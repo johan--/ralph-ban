@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/bubbles/list"
+	tea "github.com/charmbracelet/bubbletea"
 	beadslite "github.com/kylesnowschwartz/beads-lite"
 )
 
@@ -18,6 +19,22 @@ func newTestBoard(t *testing.T) *board {
 	b.loaded = true
 	b.resizeColumns()
 	return b
+}
+
+// --- newBoard column focus initialization ---
+
+func TestNewBoardFocusesOnlyFirstColumn(t *testing.T) {
+	store := newTestStore(t)
+	b := newBoard(store)
+
+	if !b.cols[0].Focused() {
+		t.Error("column 0 should be focused after newBoard")
+	}
+	for i := columnIndex(1); i < numColumns; i++ {
+		if b.cols[i].Focused() {
+			t.Errorf("column %d should be blurred after newBoard", i)
+		}
+	}
 }
 
 // --- handlePriority boundary clamping ---
@@ -183,5 +200,43 @@ func TestUndoLastMove_NilWhenNoHistory(t *testing.T) {
 
 	if cmd != nil {
 		t.Error("undoLastMove should return nil when no move to undo")
+	}
+}
+
+// --- tea.ResumeMsg ---
+
+func TestResumeMsgTriggersRefresh(t *testing.T) {
+	b := newTestBoard(t)
+
+	// Add an issue to the store after initial load — simulates
+	// external changes made while the TUI was suspended.
+	issue := makeIssue("bl-resume", "Added While Suspended", beadslite.StatusTodo)
+	if err := b.store.CreateIssue(issue); err != nil {
+		t.Fatalf("CreateIssue: %v", err)
+	}
+
+	// Send ResumeMsg — board should return a loadFromStore command.
+	_, cmd := b.Update(tea.ResumeMsg{})
+
+	if cmd == nil {
+		t.Fatal("ResumeMsg should return a command (loadFromStore)")
+	}
+
+	// Execute the command; it should produce a refreshMsg with the new issue.
+	msg := cmd()
+	rm, ok := msg.(refreshMsg)
+	if !ok {
+		t.Fatalf("loadFromStore returned %T, want refreshMsg", msg)
+	}
+
+	found := false
+	for _, iss := range rm.issues {
+		if iss.ID == "bl-resume" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("refreshMsg should contain the issue created while suspended")
 	}
 }
