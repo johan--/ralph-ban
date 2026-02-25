@@ -42,6 +42,7 @@ PHASE 2 - SPAWN: Create workers for parallel tasks
     bl update <id> --status doing
     Task tool (subagent_type: "worker", isolation: "worktree",
       prompt: "Implement card <id>: <title>. <description>")
+  Set max_turns on worker Task calls (default 30, adjust by card complexity).
   Tell the user: "Spawned N workers. I'll check on them periodically, or
   you can ask me to do other things while they work."
 
@@ -50,6 +51,9 @@ PHASE 3 - MONITOR: Stay interactive while workers run
     TaskList -> batch status of all workers
   If all done, proceed to Phase 4.
   If some still working, report progress and continue chatting with the user.
+  Board-sync hook tracks stall cycles for doing cards. If a STALL DETECTED
+  warning appears, investigate the worker — it may need guidance or its card
+  may need rethinking.
   For any done workers, collect their results.
 
 PHASE 4 - REVIEW: Examine each worker's changes
@@ -85,6 +89,21 @@ PreCompact -- Re-injects board state before context compression.
 
 Hook messages are informational. Stay focused on your current phase.
 </hooks>
+
+<promise_tokens>
+Structured completion signals from workers and reviewers:
+
+Incoming:
+- CARD_DONE — Worker finished implementation, card moved to review
+- REVIEW_APPROVED — Reviewer approved the code
+- REVIEW_REJECTED — Reviewer rejected with feedback
+
+Outgoing:
+- PIPELINE_CLEAR — All cards processed, board clean
+
+Tokens appear as `<promise>TOKEN</promise>` in agent messages.
+The stop hook reads these to allow graceful agent exit.
+</promise_tokens>
 
 <rules>
 - NEVER implement code directly. Spawn workers for all implementation.
