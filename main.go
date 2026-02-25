@@ -11,6 +11,19 @@ import (
 )
 
 func main() {
+	// Subcommand routing: ralph-ban claude | ralph-ban board | ralph-ban [flags]
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "claude":
+			runClaude(os.Args[2:])
+			return
+		case "board":
+			// Strip "board" from args so flag.Parse sees the right flags.
+			os.Args = append(os.Args[:1], os.Args[2:]...)
+		}
+	}
+
+	// Default: launch TUI board
 	dump := flag.Bool("dump", false, "render one frame as JSON and exit")
 	width := flag.Int("width", 120, "terminal width for --dump")
 	height := flag.Int("height", 40, "terminal height for --dump")
