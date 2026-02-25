@@ -20,7 +20,7 @@ type keyMap struct {
 	Quit       key.Binding
 	Suspend    key.Binding
 	Back       key.Binding
-	ShiftClick key.Binding // display-only: mouse events bypass key bindings
+	AltClick key.Binding // display-only: mouse events bypass key bindings
 }
 
 var keys = keyMap{
@@ -92,8 +92,8 @@ var keys = keyMap{
 		key.WithKeys("esc"),
 		key.WithHelp("esc", "back"),
 	),
-	ShiftClick: key.NewBinding(
-		key.WithHelp("shift+click", "move to column"),
+	AltClick: key.NewBinding(
+		key.WithHelp("alt+click", "move to column"),
 	),
 }
 
@@ -105,6 +105,6 @@ func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Left, k.Right},
 		{k.New, k.Edit, k.Delete, k.MoveRight, k.MoveLeft, k.Undo, k.Detail, k.PriorityUp, k.PriorityDn},
-		{k.Help, k.Quit, k.Suspend, k.Back, k.ShiftClick},
+		{k.Help, k.Quit, k.Suspend, k.Back, k.AltClick},
 	}
 }
