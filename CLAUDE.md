@@ -45,11 +45,17 @@ and card closure. Workers move cards to Review; only the orchestrator closes the
 
 ## Hooks
 
-Four hooks inject board state and enforce workflow gates:
+Six hooks inject board state and enforce workflow gates:
 - **SessionStart** — Board snapshot, suggests highest-priority task
-- **UserPromptSubmit** — Diffs board since last prompt, review queue nudges
-- **Stop** — Blocks exit on uncommitted changes, claimed cards, active work
+- **UserPromptSubmit** — Diffs board since last prompt, review queue nudges, stall detection
+- **Stop** — Blocks exit on uncommitted changes (all agents), claimed cards, active work (orchestrator)
+- **TeammateIdle** — Prevents workers from going idle while they own active cards
+- **TaskCompleted** — Blocks task completion if worker's cards are still in doing
 - **PreCompact** — Re-injects board state before context compression
+
+## Agent Frontmatter
+
+Workers and reviewers have `maxTurns` and `permissionMode: bypassPermissions` set in their YAML frontmatter. Claude Code enforces these natively — no CLI flags needed.
 
 ## Development
 
