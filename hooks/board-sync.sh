@@ -108,8 +108,11 @@ if [ -n "$review_nudge" ]; then
 fi
 
 if [ ${#parts[@]} -gt 0 ]; then
-  # Light lifecycle reminder — just enough to orient without repeating the full preamble.
+  # User-visible summary: just the parts, no orchestration framing.
+  user_message=$(printf '%s\n' "${parts[@]}")
+  # Agent context: prepend lifecycle reminder.
   parts=("Orchestration checkpoint: board sync follows." "${parts[@]}")
-  message=$(printf '%s\n' "${parts[@]}")
-  jq -n --arg msg "$message" '{hookSpecificOutput: {hookEventName: "UserPromptSubmit", additionalContext: $msg}}'
+  agent_message=$(printf '%s\n' "${parts[@]}")
+  jq -n --arg ctx "$agent_message" --arg msg "$user_message" \
+    '{hookSpecificOutput: {hookEventName: "UserPromptSubmit", additionalContext: $ctx}, systemMessage: $msg}'
 fi
