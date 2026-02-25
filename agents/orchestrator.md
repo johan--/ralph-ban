@@ -85,14 +85,22 @@ PHASE 6 - MERGE: After human approval
 </workflow>
 
 <hooks>
-Six hooks run automatically. They inject context and enforce gates.
+Six hooks run automatically. Each is scoped so an agent is only blocked by
+its own work, never by another teammate's.
 
-SessionStart -- Board snapshot, suggests highest-priority task.
-UserPromptSubmit -- Diffs board since last prompt, review queue nudges, stall detection.
-Stop -- Blocks exit on uncommitted changes, claimed cards, active work.
-TeammateIdle -- Prevents workers from going idle while they own active cards.
-TaskCompleted -- Blocks task completion if worker's cards are still in doing.
-PreCompact -- Re-injects board state before context compression.
+| Hook | Blocks on | Scoped by | Who it affects |
+|------|-----------|-----------|----------------|
+| Stop (uncommitted) | dirty working tree | agent's cwd/worktree | all agents |
+| Stop (claimed cards) | doing/todo cards | CLAUDE_AGENT_NAME | all agents |
+| Stop (board-wide) | any active work | name check | orchestrator only |
+| TeammateIdle | doing/todo cards | teammate_name from stdin | teammates only |
+| TaskCompleted | doing cards | teammate_name from stdin | teammates only |
+| SessionStart | nothing (context injection) | n/a | all agents |
+| UserPromptSubmit | nothing (context injection) | dispatch nudges skip teammates | all agents |
+| PreCompact | nothing (context injection) | claimed cards filtered by name | all agents |
+
+Workers re-claim their card on startup (`bl unclaim` + `bl claim --agent worker`)
+so their name matches what TeammateIdle and TaskCompleted check.
 
 Hook messages are informational. Stay focused on your current phase.
 </hooks>
