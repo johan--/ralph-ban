@@ -203,6 +203,62 @@ func TestUndoLastMove_NilWhenNoHistory(t *testing.T) {
 	}
 }
 
+// --- columnAtX hit-testing ---
+
+func TestColumnAtX_MapsToCorrectColumn(t *testing.T) {
+	b := newTestBoard(t) // 120 wide, 5 columns visible → 24 px each
+
+	tests := []struct {
+		x    int
+		want columnIndex
+	}{
+		{0, colBacklog},
+		{23, colBacklog},
+		{24, colTodo},
+		{47, colTodo},
+		{48, colDoing},
+		{96, colDone},
+		{119, colDone},
+	}
+
+	for _, tt := range tests {
+		col, ok := b.columnAtX(tt.x)
+		if !ok {
+			t.Errorf("columnAtX(%d) returned false, want column %d", tt.x, tt.want)
+			continue
+		}
+		if col != tt.want {
+			t.Errorf("columnAtX(%d) = %d, want %d", tt.x, col, tt.want)
+		}
+	}
+}
+
+func TestColumnAtX_OutOfBounds(t *testing.T) {
+	b := newTestBoard(t)
+
+	if _, ok := b.columnAtX(-1); ok {
+		t.Error("columnAtX(-1) should return false")
+	}
+	if _, ok := b.columnAtX(b.termWidth); ok {
+		t.Errorf("columnAtX(%d) should return false (beyond terminal width)", b.termWidth)
+	}
+}
+
+func TestColumnAtX_WithPanOffset(t *testing.T) {
+	b := newTestBoard(t)
+	b.termWidth = 72 // 72/24 = 3 visible columns
+	b.panOffset = 2  // showing Doing, Review, Done
+	b.resizeColumns()
+
+	col, ok := b.columnAtX(0)
+	if !ok {
+		t.Fatal("columnAtX(0) with panOffset=2 should return true")
+	}
+	if col != colDoing {
+		t.Errorf("columnAtX(0) with panOffset=2 = %d, want %d (colDoing)", col, colDoing)
+	}
+}
+
 // --- tea.ResumeMsg ---
 
 func TestResumeMsgTriggersRefresh(t *testing.T) {

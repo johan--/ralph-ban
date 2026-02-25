@@ -138,6 +138,33 @@ func (b *board) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case saveMsg:
 		return b, b.handleSave(msg)
 
+	case tea.MouseMsg:
+		if msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
+			targetCol, ok := b.columnAtX(msg.X)
+			if !ok {
+				return b, nil
+			}
+			if msg.Shift {
+				// Shift+click: move selected card to clicked column.
+				if targetCol == b.focused {
+					return b, nil
+				}
+				cd, cardOk := b.cols[b.focused].SelectedCard()
+				if !cardOk {
+					return b, nil
+				}
+				src := b.focused
+				return b, func() tea.Msg {
+					return moveMsg{card: cd, source: src, target: targetCol}
+				}
+			}
+			// Plain click: focus the clicked column.
+			if targetCol != b.focused {
+				b.moveFocus(int(targetCol - b.focused))
+			}
+			return b, nil
+		}
+
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, keys.Quit):
@@ -509,6 +536,31 @@ func (b *board) visibleCount() int {
 		count = int(numColumns)
 	}
 	return count
+}
+
+// columnAtX maps a mouse X coordinate to the column at that position.
+// Returns false if the coordinate falls outside any visible column.
+func (b *board) columnAtX(x int) (columnIndex, bool) {
+	visible := b.visibleCount()
+	if visible == 0 {
+		return 0, false
+	}
+	if x < 0 {
+		return 0, false
+	}
+	colWidth := b.termWidth / visible
+	if colWidth == 0 {
+		return 0, false
+	}
+	col := x / colWidth
+	if col < 0 || col >= visible {
+		return 0, false
+	}
+	idx := columnIndex(b.panOffset + col)
+	if idx >= numColumns {
+		return 0, false
+	}
+	return idx, true
 }
 
 // updatePan adjusts panOffset so the focused column is visible.
