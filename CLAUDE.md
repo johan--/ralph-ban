@@ -12,26 +12,44 @@ Go TUI kanban board backed by beads-lite's SQLite database.
 - `keys.go` — Vim-style keybindings
 - `messages.go` — Message types for decoupled model communication
 
-## Board-Driven Workflow
+## Agent Roles
 
-Hooks inject board state into your context automatically:
-- **SessionStart** — Shows current board, suggests highest-priority task
-- **UserPromptSubmit** — Diffs board since last prompt, reports card movements
-- **Stop** — Blocks exit while Todo/Doing items remain
+Three agent types coordinate work through the kanban board:
 
-### Working with the board
+- **Orchestrator** (`agents/orchestrator.md`) — Coordinates the pipeline. Assesses
+  the board, spawns workers and reviewers, monitors progress, gates merges behind
+  human approval. Never implements or reviews code directly.
+- **Worker** (`agents/worker.md`) — Implements a single card in an isolated worktree.
+  Runs tests, commits, moves card to review, reports back.
+- **Reviewer** (`agents/reviewer.md`) — Reviews a single card in an isolated worktree.
+  Runs tests, checks against review checklist, reports approve/reject.
 
-1. Check the board context injected by hooks at session start
-2. When starting work on a card: `bl claim <id> --agent claude`
-3. When work is done: `bl update <id> --status review`
-4. If blocked, note it and pick up the next Todo item
-5. Don't stop while Todo/Doing cards exist unless the user says to
+### Workflow phases
+
+```
+ASSESS -> SPAWN -> MONITOR -> REVIEW -> HUMAN APPROVAL -> MERGE
+```
+
+The orchestrator drives this pipeline. Workers and reviewers are spawned into
+isolated worktrees for parallel execution. Nothing merges to main without
+explicit human approval.
 
 ### Status flow
 
 ```
 Backlog -> To Do -> Doing -> Review -> Done
 ```
+
+Cards move right as work progresses. The orchestrator owns status transitions
+and card closure. Workers move cards to Review; only the orchestrator closes them.
+
+## Hooks
+
+Four hooks inject board state and enforce workflow gates:
+- **SessionStart** — Board snapshot, suggests highest-priority task
+- **UserPromptSubmit** — Diffs board since last prompt, review queue nudges
+- **Stop** — Blocks exit on uncommitted changes, claimed cards, active work
+- **PreCompact** — Re-injects board state before context compression
 
 ## Development
 
