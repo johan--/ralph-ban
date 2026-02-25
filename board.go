@@ -144,8 +144,8 @@ func (b *board) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !ok {
 				return b, nil
 			}
-			if msg.Alt {
-				// Alt+click: move selected card to clicked column.
+			if msg.Ctrl {
+				// Ctrl+click: move selected card to clicked column.
 				if targetCol == b.focused {
 					return b, nil
 				}
