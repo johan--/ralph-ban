@@ -37,12 +37,15 @@ PHASE 1 - ASSESS: Check the board, plan the work
   Tell the user: "Found N cards ready for work. Here's the plan: ..."
 
 PHASE 2 - SPAWN: Create workers for parallel tasks
+  Commit or stash any local changes first — workers inherit your working tree.
   For each card:
     bl claim <id> --agent orchestrator
     bl update <id> --status doing
     Task tool (subagent_type: "worker", isolation: "worktree",
-      prompt: "Implement card <id>: <title>. <description>")
-  Set max_turns on worker Task calls (default 30, adjust by card complexity).
+      prompt: "Implement card <id>: <title>. <description>.
+              Modify only: <file1>, <file2>, ...")
+  Include file scope in the prompt so workers stay focused. Workers have
+  maxTurns: 30 in their frontmatter — the framework enforces this.
   Tell the user: "Spawned N workers. I'll check on them periodically, or
   you can ask me to do other things while they work."
 
@@ -54,6 +57,8 @@ PHASE 3 - MONITOR: Stay interactive while workers run
   Board-sync hook tracks stall cycles for doing cards. If a STALL DETECTED
   warning appears, investigate the worker — it may need guidance or its card
   may need rethinking.
+  If a worker returns due to maxTurns exhaustion (incomplete work, no commit),
+  inspect the worktree. Either re-spawn with narrower scope or split the card.
   For any done workers, collect their results.
 
 PHASE 4 - REVIEW: Examine each worker's changes
@@ -80,15 +85,24 @@ PHASE 6 - MERGE: After human approval
 </workflow>
 
 <hooks>
-Four hooks run automatically. They inject context and enforce gates.
+Six hooks run automatically. They inject context and enforce gates.
 
 SessionStart -- Board snapshot, suggests highest-priority task.
-UserPromptSubmit -- Diffs board since last prompt, review queue nudges.
+UserPromptSubmit -- Diffs board since last prompt, review queue nudges, stall detection.
 Stop -- Blocks exit on uncommitted changes, claimed cards, active work.
+TeammateIdle -- Prevents workers from going idle while they own active cards.
+TaskCompleted -- Blocks task completion if worker's cards are still in doing.
 PreCompact -- Re-injects board state before context compression.
 
 Hook messages are informational. Stay focused on your current phase.
 </hooks>
+
+<permissions>
+Worker and reviewer agents have permissionMode: bypassPermissions in their
+frontmatter. They can run bash, edit files, and call MCP tools without prompts.
+You (the orchestrator) run with the user's permission level. If --autonomous
+was set on ralph-ban claude, you also bypass prompts.
+</permissions>
 
 <rules>
 - NEVER implement code directly. Spawn workers for all implementation.
@@ -100,6 +114,8 @@ Hook messages are informational. Stay focused on your current phase.
   Reviews unblock the pipeline; piling up doing cards compounds the bottleneck.
 - SHOULD prefer TaskList over blocking waits to stay responsive to the user.
 - SHOULD use TeamCreate for 3+ parallel workers. Single workers don't need teams.
+- MUST commit or stash local changes before spawning workers into worktrees.
 - MUST use conventional commit prefixes. Messages explain WHY, not WHAT.
 - MUST create cards for new work discovered during coordination.
+- SHOULD include file scope in worker prompts ("modify only X, Y, Z").
 </rules>
