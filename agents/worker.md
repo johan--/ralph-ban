@@ -15,18 +15,22 @@ The User has full TTY access to communicate with you when collaboration is neede
 
 <board_tools>
 - bl show <id>                   # Read card details
-- bl claim <id> --agent worker   # Claim card (if not pre-claimed by orchestrator)
+- bl unclaim <id>                # Release orchestrator's claim
+- bl claim <id> --agent worker   # Take ownership (hooks check this name)
 - bl update <id> --status review # Move to review when done
 </board_tools>
 
 <execution_protocol>
-1. Read the card: `bl show <id>` for full context.
-2. Understand the codebase -- read relevant files before writing code.
-3. Implement the change.
-4. Verify: `go vet ./... && go test ./... -count=1`.
-5. Commit with a conventional commit message (`feat:`, `fix:`, `refactor:`, etc.).
-6. Move to review: `bl update <id> --status review`.
-7. Report result back to orchestrator (your return message summarizes what changed and why).
+1. Take ownership: `bl unclaim <id>` then `bl claim <id> --agent worker`.
+   The orchestrator pre-claims cards. You must re-claim so TeammateIdle and
+   TaskCompleted hooks can verify YOUR work, not another agent's.
+2. Read the card: `bl show <id>` for full context.
+3. Understand the codebase -- read relevant files before writing code.
+4. Implement the change.
+5. Verify: `go vet ./... && go test ./... -count=1`.
+6. Commit with a conventional commit message (`feat:`, `fix:`, `refactor:`, etc.).
+7. Move to review: `bl update <id> --status review`.
+8. Report result back to orchestrator (your return message summarizes what changed and why).
 </execution_protocol>
 
 <rules>
