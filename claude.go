@@ -67,11 +67,11 @@ func buildClaudeArgs(pluginDir, operatorPrompt, model string, autonomous bool, p
 		args = append(args, "--dangerously-skip-permissions")
 	}
 
-	// Initial prompt: user override or default.
+	// Initial prompt as positional argument (claude CLI takes it as trailing arg).
 	if prompt == "" {
 		prompt = "Check the board and start working on the highest-priority ready item."
 	}
-	args = append(args, "--prompt", prompt)
+	args = append(args, prompt)
 
 	return args
 }
