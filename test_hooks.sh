@@ -381,6 +381,47 @@ test_teammate_idle_allows_review_only() {
   teardown
 }
 
+# --- task-completed.sh ---
+
+test_task_completed_allows_no_doing() {
+  setup
+  local create_out id
+  create_out=$(bl create "Done Task")
+  id=$(extract_id "$create_out")
+  bl claim "$id" --agent test-worker >/dev/null 2>&1 || true
+  bl update "$id" --status review >/dev/null
+
+  local input='{"teammate_name":"test-worker"}'
+  local exit_code=0
+  echo "$input" | "$HOOKS_DIR/task-completed.sh" >/dev/null 2>&1 || exit_code=$?
+  if [ "$exit_code" -eq 0 ]; then
+    PASS=$((PASS + 1))
+  else
+    FAIL=$((FAIL + 1))
+    echo "FAIL: task-completed should allow when no doing cards (got exit $exit_code)"
+  fi
+  teardown
+}
+
+test_task_completed_blocks_doing_cards() {
+  setup
+  local create_out id
+  create_out=$(bl create "Still Doing")
+  id=$(extract_id "$create_out")
+  bl claim "$id" --agent test-worker >/dev/null 2>&1 || true
+
+  local input='{"teammate_name":"test-worker"}'
+  local exit_code=0
+  echo "$input" | "$HOOKS_DIR/task-completed.sh" >/dev/null 2>&1 || exit_code=$?
+  if [ "$exit_code" -eq 2 ]; then
+    PASS=$((PASS + 1))
+  else
+    FAIL=$((FAIL + 1))
+    echo "FAIL: task-completed should block when doing cards exist (got exit $exit_code)"
+  fi
+  teardown
+}
+
 # --- Run all tests ---
 
 echo "=== ralph-ban Hook Tests ==="
@@ -407,6 +448,8 @@ test_board_sync_tracks_stall
 test_teammate_idle_allows_no_cards
 test_teammate_idle_blocks_active_cards
 test_teammate_idle_allows_review_only
+test_task_completed_allows_no_doing
+test_task_completed_blocks_doing_cards
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="
