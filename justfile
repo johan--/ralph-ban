@@ -39,19 +39,19 @@ test-hooks: build-bl
 test-all: test test-cli test-hooks
 
 # Dump the TUI as JSON (no TTY needed)
-dump *args: build
+qa-dump *args: build
     ./{{ bin }} --dump {{ args }}
 
 # Dump at a specific width (e.g. just dump-at 80)
-dump-at width="120" height="40": build
+qa-dump-at width="120" height="40": build
     ./{{ bin }} --dump --width {{ width }} --height {{ height }}
 
 # Dump and pretty-print the board structure
-dump-board: build
+qa-dump-board: build
     ./{{ bin }} --dump | jq '{focus, pan_offset, columns: [.columns[] | {title, cards: [.cards[] | {id, title, status}]}]}'
 
 # Dump and display the rendered view text
-dump-view width="120" height="40": build
+qa-dump-view width="120" height="40": build
     ./{{ bin }} --dump --width {{ width }} --height {{ height }} | jq -r '.view'
 
 # Launch the interactive TUI
