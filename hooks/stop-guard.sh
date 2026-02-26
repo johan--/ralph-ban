@@ -106,6 +106,7 @@ fi
 MAX_STALLS=5
 CYCLE_FILE="${_STOP_ROOT}/.ralph-ban/.stop-cycles"
 HASH_FILE="${_STOP_ROOT}/.ralph-ban/.stop-board-hash"
+mkdir -p "${_STOP_ROOT}/.ralph-ban"
 
 current_hash=$(read_board_hash)
 last_hash=$(cat "$HASH_FILE" 2>/dev/null || echo "")
@@ -129,7 +130,6 @@ else
   # Board changed — progress was made, reset stall counter
   echo "0" > "$CYCLE_FILE"
 fi
-mkdir -p "${_STOP_ROOT}/.ralph-ban"
 echo "$current_hash" > "$HASH_FILE"
 
 # --- Specific next-action guidance ---
