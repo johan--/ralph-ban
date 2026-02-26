@@ -19,6 +19,7 @@ func runClaude(args []string) {
 	autonomous := fs.Bool("autonomous", false, "skip permission prompts (dangerously-skip-permissions)")
 	teammateMode := fs.String("teammate-mode", "in-process", "teammate display mode (in-process, split-pane, auto)")
 	prompt := fs.String("prompt", "", "override the initial prompt sent to claude")
+	resume := fs.String("resume", "", "resume a session by ID, or pass empty string for interactive picker")
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: ralph-ban claude [flags]\n\nStart a Claude Code session with board orchestrator role.\n\nFlags:\n")
 		fs.PrintDefaults()
@@ -42,7 +43,7 @@ func runClaude(args []string) {
 	// for workers in worktrees even though their cwd differs from the project root.
 	settingsPath := filepath.Join(pluginDir, ".claude-plugin", "settings.json")
 
-	claudeArgs := buildClaudeArgs(pluginDir, settingsPath, *model, *autonomous, *teammateMode, *prompt)
+	claudeArgs := buildClaudeArgs(pluginDir, settingsPath, *model, *autonomous, *teammateMode, *prompt, *resume)
 
 	// Set agent name so hooks can identify this session.
 	os.Setenv("CLAUDE_AGENT_NAME", *name)
@@ -63,11 +64,18 @@ func runClaude(args []string) {
 // agents/orchestrator.md and applies its frontmatter (model, isolation, etc.).
 // settingsPath is passed via --settings so hook commands resolve correctly
 // for both the orchestrator and workers spawned in isolated worktrees.
-func buildClaudeArgs(pluginDir, settingsPath, model string, autonomous bool, teammateMode, prompt string) []string {
+func buildClaudeArgs(pluginDir, settingsPath, model string, autonomous bool, teammateMode, prompt, resume string) []string {
 	args := []string{
 		"--plugin-dir", pluginDir,
-		"--agent", "orchestrator",
 		"--settings", settingsPath,
+	}
+
+	// Resuming a session: pass --resume and skip --agent (the resumed session
+	// already has its agent context). Also skip the default prompt.
+	if resume != "" {
+		args = append(args, "--resume", resume)
+	} else {
+		args = append(args, "--agent", "orchestrator")
 	}
 
 	// Only pass --model when explicitly overriding the agent's default.
@@ -83,11 +91,14 @@ func buildClaudeArgs(pluginDir, settingsPath, model string, autonomous bool, tea
 		args = append(args, "--teammate-mode", teammateMode)
 	}
 
-	// Initial prompt as positional argument.
-	if prompt == "" {
-		prompt = "State your role and mission, then assess the board and begin orchestration."
+	// Initial prompt as positional argument. Skipped when resuming —
+	// the resumed session continues where it left off.
+	if resume == "" {
+		if prompt == "" {
+			prompt = "State your role and mission, then assess the board and begin orchestration."
+		}
+		args = append(args, prompt)
 	}
-	args = append(args, prompt)
 
 	return args
 }

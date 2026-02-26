@@ -14,6 +14,7 @@ func TestBuildClaudeArgs(t *testing.T) {
 		autonomous   bool
 		teammateMode string
 		prompt       string
+		resume       string
 		wantContains []string
 		wantAbsent   []string
 	}{
@@ -35,6 +36,7 @@ func TestBuildClaudeArgs(t *testing.T) {
 			wantAbsent: []string{
 				"--model",
 				"--dangerously-skip-permissions",
+				"--resume",
 			},
 		},
 		{
@@ -62,11 +64,30 @@ func TestBuildClaudeArgs(t *testing.T) {
 			wantContains: []string{"Do something specific"},
 			wantAbsent:   []string{"State your role"},
 		},
+		{
+			name:         "resume skips agent and prompt",
+			pluginDir:    "/project",
+			settingsPath: "/project/.claude-plugin/settings.json",
+			model:        "",
+			autonomous:   false,
+			teammateMode: "in-process",
+			prompt:       "",
+			resume:       "abc-123-session-id",
+			wantContains: []string{
+				"--plugin-dir", "/project",
+				"--settings", "/project/.claude-plugin/settings.json",
+				"--resume", "abc-123-session-id",
+			},
+			wantAbsent: []string{
+				"--agent",
+				"State your role",
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			args := buildClaudeArgs(tt.pluginDir, tt.settingsPath, tt.model, tt.autonomous, tt.teammateMode, tt.prompt)
+			args := buildClaudeArgs(tt.pluginDir, tt.settingsPath, tt.model, tt.autonomous, tt.teammateMode, tt.prompt, tt.resume)
 			joined := strings.Join(args, " ")
 
 			t.Logf("args: %v", args)
