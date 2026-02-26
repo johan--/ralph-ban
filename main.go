@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	// Subcommand routing: ralph-ban init | ralph-ban claude | ralph-ban board | ralph-ban [flags]
+	// Subcommand routing: ralph-ban init | ralph-ban claude | ralph-ban snapshot | ralph-ban board | ralph-ban [flags]
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "init":
@@ -19,6 +19,9 @@ func main() {
 			return
 		case "claude":
 			runClaude(os.Args[2:])
+			return
+		case "snapshot":
+			runSnapshot(os.Args[2:])
 			return
 		case "board":
 			// Strip "board" from args so flag.Parse sees the right flags.
@@ -54,6 +57,41 @@ func main() {
 
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// runSnapshot handles the `ralph-ban snapshot` subcommand.
+// --format json (default) writes structured JSON to stdout.
+// --format ascii renders the board as plain text (no TUI required).
+func runSnapshot(args []string) {
+	fs := flag.NewFlagSet("snapshot", flag.ExitOnError)
+	format := fs.String("format", "json", "output format: json or ascii")
+	width := fs.Int("width", 120, "terminal width (ascii format only)")
+	height := fs.Int("height", 40, "terminal height (ascii format only)")
+	fs.Parse(args)
+
+	dbPath := findDB()
+	store, err := beadslite.NewStore(dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to open database: %v\n", err)
+		os.Exit(1)
+	}
+	defer store.Close()
+
+	switch *format {
+	case "json":
+		if err := writeSnapshot(store, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "snapshot failed: %v\n", err)
+			os.Exit(1)
+		}
+	case "ascii":
+		if err := writeSnapshotASCII(store, *width, *height, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "snapshot ascii failed: %v\n", err)
+			os.Exit(1)
+		}
+	default:
+		fmt.Fprintf(os.Stderr, "unknown format %q: use json or ascii\n", *format)
 		os.Exit(1)
 	}
 }
