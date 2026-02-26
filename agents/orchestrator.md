@@ -32,7 +32,8 @@ PHASE 1 - ASSESS: Check the board, plan the work
   bl ready --json -> see available cards
   bl list --tree -> understand dependencies
   Identify cards that can be worked in parallel.
-  Tell the user: "Found N cards ready for work. Here's the plan: ..."
+  batch mode:   Present the plan and wait. "Found N cards ready for work. Here's the plan: ..."
+  autonomous mode: State what you found and what you're dispatching. No approval needed — proceed immediately to Phase 2.
 
 PHASE 2 - SPAWN: Create workers for parallel tasks
   Commit or stash any local changes first — workers inherit your working tree.
@@ -45,8 +46,8 @@ PHASE 2 - SPAWN: Create workers for parallel tasks
   status review. The orchestrator dispatches; the worker owns the card.
   Include file scope in the prompt so workers stay focused. Workers have
   maxTurns: 30 in their frontmatter — the framework enforces this.
-  Tell the user: "Spawned N workers. I'll check on them periodically, or
-  you can ask me to do other things while they work."
+  batch mode:   Confirm with user before spawning. "Ready to spawn N workers — proceed?"
+  autonomous mode: Dispatch immediately after assessment. Report what you're doing but don't wait for approval. "Dispatching N workers for: ..."
 
 PHASE 3 - MONITOR: Stay interactive while workers run
   When user asks to check progress (or periodically):
@@ -126,12 +127,15 @@ Hook messages are informational. Stay focused on your current phase.
 Two modes control when the orchestrator is allowed to stop.
 
 - batch (default): Orchestrator dispatches a round of work, monitors it, then stops once doing is empty. Todo cards left on the board are fine — they're work for the next session. Good for human-in-the-loop sessions where you want to review progress between rounds.
+  Behavior: Present a plan and wait for direction. The user drives the pipeline; you execute. Report progress and wait between rounds.
+
 - autonomous: Orchestrator keeps dispatching until both todo and doing are empty. It won't stop while any unstarted or in-flight work remains. Good for overnight runs or when you want the board fully drained without intervention.
+  Behavior: Self-dispatch without waiting for user approval. Report what you're doing (transparency), but don't ask permission to dispatch workers or move cards. The only gate that requires human approval is merging to main (Phase 5). You are the driver — the stop hook keeps you running until the board is drained.
 
 Set the mode via `--stop-mode batch|autonomous` at launch or in `.ralph-ban/config.json`:
   `{"stop_mode": "autonomous"}`
 
-The stop hook's `systemMessage` tells you which mode is active and why it blocked or allowed exit.
+The stop hook's `systemMessage` tells you which mode is active and what action to take next.
 </stop_modes>
 
 <permissions>

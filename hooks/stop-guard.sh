@@ -184,7 +184,7 @@ if [ "$should_block" = "yes" ]; then
     # In autonomous mode, suggest next todo card when no unclaimed doing work
     next_card=$("$BL" ready --json 2>/dev/null | jq -r 'select(.status == "todo") | "\(.id) — \(.title)"' 2>/dev/null | head -1 || true)
     if [ -n "$next_card" ]; then
-      next_action="Next card to dispatch: $next_card"
+      next_action="Dispatch now: $next_card"
     fi
   fi
 
@@ -207,7 +207,7 @@ if [ "$should_block" = "yes" ]; then
       jq -n --arg todo "$todo_count" --arg doing "$doing_count" '{
         decision: "block",
         reason: "Board has active work remaining",
-        systemMessage: ("Stop mode: autonomous. " + $todo + " todo and " + $doing + " doing cards remain. Dispatch the next card or ask the user to switch to batch mode.")
+        systemMessage: ("Stop mode: autonomous. " + $todo + " todo and " + $doing + " doing cards remain. Dispatch the next card now. The stop hook keeps you running until the board is drained.")
       }' | debounce_stop_message
     else
       jq -n --arg doing "$doing_count" '{
