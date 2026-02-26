@@ -120,10 +120,6 @@ func editForm(issue *beadslite.Issue, colIdx columnIndex) form {
 	}
 }
 
-func (f form) Init() tea.Cmd {
-	return textinput.Blink
-}
-
 func (f form) Update(msg tea.Msg) (form, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:

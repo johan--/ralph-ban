@@ -12,16 +12,6 @@ import (
 
 const refreshInterval = 2 * time.Second
 
-// loadIssues fetches all issues from the store and partitions them into
-// per-column item slices. The board calls this on init and on each refresh tick.
-func loadIssues(store *beadslite.Store) ([numColumns][]list.Item, error) {
-	issues, err := store.ListIssues()
-	if err != nil {
-		return [numColumns][]list.Item{}, err
-	}
-	return partitionByStatus(issues, nil), nil
-}
-
 // partitionByStatus sorts issues into column buckets by status,
 // with cards sorted by priority within each column (P0 first).
 // blockedIDs marks which issues have unresolved blockers; pass nil to skip.

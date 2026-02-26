@@ -1,12 +1,22 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/charmbracelet/bubbles/list"
 	beadslite "github.com/kylesnowschwartz/beads-lite"
 )
+
+// label returns a human-readable description of the filter, e.g. "priority=P1".
+// Test-only helper for assertions.
+func (f activeFilter) label() string {
+	if f.field == filterNone {
+		return "none"
+	}
+	return fmt.Sprintf("%s=%s", f.field, f.value)
+}
 
 func makeFilterIssue(id string, priority int, issueType beadslite.IssueType, assignedTo string) *beadslite.Issue {
 	return &beadslite.Issue{

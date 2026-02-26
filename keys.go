@@ -3,30 +3,30 @@ package main
 import "github.com/charmbracelet/bubbles/key"
 
 type keyMap struct {
-	Up         key.Binding
-	Down       key.Binding
-	Left       key.Binding
-	Right      key.Binding
-	New        key.Binding
-	Edit       key.Binding
-	Delete     key.Binding
-	MoveRight  key.Binding
-	MoveLeft   key.Binding
-	Undo       key.Binding
-	Detail     key.Binding
-	PriorityUp key.Binding
-	PriorityDn key.Binding
-	Search     key.Binding
-	FilterNext key.Binding
-	FilterPrev key.Binding
-	BlockedBy  key.Binding // open dep-link picker: focused card is blocked by selection
-	Blocks     key.Binding // open dep-link picker: focused card blocks selection
-	Activity   key.Binding
-	Help       key.Binding
-	Quit       key.Binding
-	Suspend    key.Binding
-	Back       key.Binding
-	CtrlClick  key.Binding // display-only: mouse events bypass key bindings
+	Up           key.Binding
+	Down         key.Binding
+	Left         key.Binding
+	Right        key.Binding
+	New          key.Binding
+	Edit         key.Binding
+	Delete       key.Binding
+	MoveRight    key.Binding
+	MoveLeft     key.Binding
+	Undo         key.Binding
+	Detail       key.Binding
+	PriorityUp   key.Binding
+	PriorityDown key.Binding
+	Search       key.Binding
+	FilterNext   key.Binding
+	FilterPrev   key.Binding
+	BlockedBy    key.Binding // open dep-link picker: focused card is blocked by selection
+	Blocks       key.Binding // open dep-link picker: focused card blocks selection
+	Activity     key.Binding
+	Help         key.Binding
+	Quit         key.Binding
+	Suspend      key.Binding
+	Back         key.Binding
+	CtrlClick    key.Binding // display-only: mouse events bypass key bindings
 }
 
 var keys = keyMap{
@@ -78,7 +78,7 @@ var keys = keyMap{
 		key.WithKeys("+", "="),
 		key.WithHelp("+", "pri ↑"),
 	),
-	PriorityDn: key.NewBinding(
+	PriorityDown: key.NewBinding(
 		key.WithKeys("-"),
 		key.WithHelp("-", "pri ↓"),
 	),
@@ -134,7 +134,7 @@ func (k keyMap) ShortHelp() []key.Binding {
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Left, k.Right},
-		{k.New, k.Edit, k.Delete, k.MoveRight, k.MoveLeft, k.Undo, k.Detail, k.PriorityUp, k.PriorityDn},
+		{k.New, k.Edit, k.Delete, k.MoveRight, k.MoveLeft, k.Undo, k.Detail, k.PriorityUp, k.PriorityDown},
 		{k.Search, k.FilterNext, k.FilterPrev, k.BlockedBy, k.Blocks, k.Activity, k.Help, k.Quit, k.Suspend, k.Back, k.CtrlClick},
 	}
 }

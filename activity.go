@@ -30,11 +30,10 @@ const heartbeatStaleSeconds = 300
 
 // agentEntry is one row in the activity table.
 type agentEntry struct {
-	name      string
-	cardID    string // empty when idle
-	cardTitle string
-	status    agentStatus
-	lastSeen  time.Duration // time since last heartbeat; -1 when no file
+	name     string
+	cardID   string // empty when idle
+	status   agentStatus
+	lastSeen time.Duration // time since last heartbeat; -1 when no file
 }
 
 // activityRefreshMsg carries fresh agent data from a scan of the heartbeats dir.
@@ -55,11 +54,6 @@ type activity struct {
 // heartbeatDir is the path to .ralph-ban/heartbeats/.
 func newActivity(heartbeatDir string) activity {
 	return activity{heartbeatDir: heartbeatDir}
-}
-
-// Init returns a command that loads the initial activity data.
-func (a activity) Init() tea.Cmd {
-	return nil // populated on first refresh tick from board
 }
 
 // Update handles activity view messages.
@@ -202,7 +196,6 @@ func scanActivity(heartbeatDir string, issues []*beadslite.Issue) []agentEntry {
 			}
 			if cardIssue != nil {
 				entry.cardID = cardIssue.ID
-				entry.cardTitle = cardIssue.Title
 			}
 			entries = append(entries, entry)
 		}
@@ -213,11 +206,10 @@ func scanActivity(heartbeatDir string, issues []*beadslite.Issue) []agentEntry {
 	for agentName, issue := range doingCards {
 		if !seen[agentName] {
 			entries = append(entries, agentEntry{
-				name:      agentName,
-				cardID:    issue.ID,
-				cardTitle: issue.Title,
-				status:    statusIdle,
-				lastSeen:  -1,
+				name:     agentName,
+				cardID:   issue.ID,
+				status:   statusIdle,
+				lastSeen: -1,
 			})
 		}
 	}

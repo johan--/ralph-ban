@@ -153,7 +153,7 @@ func (c *column) Update(msg tea.Msg) tea.Cmd {
 			return nil
 		case key.Matches(msg, keys.PriorityUp):
 			return c.adjustPriority(-1)
-		case key.Matches(msg, keys.PriorityDn):
+		case key.Matches(msg, keys.PriorityDown):
 			return c.adjustPriority(1)
 		}
 	}

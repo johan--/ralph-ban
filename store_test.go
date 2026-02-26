@@ -34,6 +34,16 @@ func makeIssue(id, title string, status beadslite.Status) *beadslite.Issue {
 	}
 }
 
+// loadIssues fetches all issues from the store and partitions them into
+// per-column item slices. Test-only helper; the board uses fetchRefresh directly.
+func loadIssues(store *beadslite.Store) ([numColumns][]list.Item, error) {
+	issues, err := store.ListIssues()
+	if err != nil {
+		return [numColumns][]list.Item{}, err
+	}
+	return partitionByStatus(issues, nil), nil
+}
+
 // --- partitionByStatus ---
 
 func TestPartitionByStatus_Empty(t *testing.T) {

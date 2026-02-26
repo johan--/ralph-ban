@@ -27,15 +27,6 @@ type activeFilter struct {
 	value string
 }
 
-// label returns a human-readable description of the filter, e.g. "priority=P1".
-// Returns "none" when no filter is active.
-func (f activeFilter) label() string {
-	if f.field == filterNone {
-		return "none"
-	}
-	return fmt.Sprintf("%s=%s", f.field, f.value)
-}
-
 // matches returns true if the given issue passes the filter.
 // A filterNone filter always passes.
 func (f activeFilter) matches(issue *beadslite.Issue) bool {
