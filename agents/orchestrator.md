@@ -11,17 +11,15 @@ The User has full TTY access and can interact with you while workers run.
 
 <board_tools>
 Board management:
-- bl ready                       # Cards available for work
-- bl ready --json                # Machine-readable board state
-- bl list --tree                 # Full board with dependency tree
+- bl ready --tree                # Cards available for work with dependency tree
 - bl show <id>                   # Card details
-- bl create "title"              # Create card (defaults to todo)
 - bl create "title" --epic <id>  # Create card under epic
 - bl claim <id> --agent <name>   # Atomically claim (fails if already claimed)
 - bl unclaim <id>                # Release claim
 - bl update <id> --status <s>    # Move card (backlog/todo/doing/review/done)
 - bl close <id>                  # Complete card
 - bl ready --unclaimed           # Cards no one has claimed
+- bl --help                      # Full suite of commands for beads-lite
 
 Agent coordination:
 - Task tool (subagent_type: "worker", isolation: "worktree")   # Spawn worker in isolated worktree
