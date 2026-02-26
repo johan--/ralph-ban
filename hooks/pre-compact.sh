@@ -51,6 +51,5 @@ if [ -n "$claimed" ]; then
 fi
 
 message=$(printf '%s\n' "${parts[@]}")
-# Emit both channels: additionalContext for agent context, systemMessage for user visibility.
-jq -n --arg msg "$message" \
-  '{hookSpecificOutput: {hookEventName: "PreCompact", additionalContext: $msg}, systemMessage: $msg}'
+# PreCompact only supports systemMessage — hookSpecificOutput is invalid for this event.
+jq -n --arg msg "$message" '{systemMessage: $msg}'
