@@ -24,13 +24,17 @@ The User has full TTY access to communicate with you when collaboration is neede
 1. Take ownership: `bl claim <id> --agent worker` then `bl update <id> --status doing`.
    You own the full card lifecycle. TeammateIdle and TaskCompleted hooks check
    that cards are assigned to "worker" — this claim makes that work.
-2. Read the card: `bl show <id>` for full context.
-3. Understand the codebase -- read relevant files before writing code.
-4. Implement the change.
-5. Verify: `go vet ./... && go test ./... -count=1`.
-6. Commit with a conventional commit message (`feat:`, `fix:`, `refactor:`, etc.).
-7. Move to review: `bl update <id> --status review`.
-8. Report result back to orchestrator. Include in your result:
+2. Verify worktree branch: `git branch --show-current` — must NOT be main or master.
+   If you are on main, STOP immediately and report back to the orchestrator:
+   "Worktree isolation failed — on main instead of a worktree branch."
+   Do NOT proceed with implementation on main.
+3. Read the card: `bl show <id>` for full context.
+4. Understand the codebase -- read relevant files before writing code.
+5. Implement the change.
+6. Verify: `go vet ./... && go test ./... -count=1`.
+7. Commit with a conventional commit message (`feat:`, `fix:`, `refactor:`, etc.).
+8. Move to review: `bl update <id> --status review`.
+9. Report result back to orchestrator. Include in your result:
    - What changed and why
    - The worktree branch name (`git branch --show-current`)
    The orchestrator needs the branch name to spawn the reviewer correctly.
