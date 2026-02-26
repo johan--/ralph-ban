@@ -63,6 +63,14 @@ func newTextarea() textarea.Model {
 	ta.SetHeight(4)
 	ta.CharLimit = 2000
 	ta.ShowLineNumbers = false
+
+	// The default CursorLine uses Background("0") which renders as a black bar
+	// on light terminals where dark/light detection fails. Clear just the
+	// background; leave all other textarea styles at their defaults.
+	focused, _ := textarea.DefaultStyles()
+	focused.CursorLine = focused.CursorLine.UnsetBackground()
+	ta.FocusedStyle = focused
+
 	return ta
 }
 
