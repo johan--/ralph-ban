@@ -38,9 +38,14 @@ type dumpOutput struct {
 func dumpBoard(store *beadslite.Store, width, height int, w io.Writer) error {
 	b := newBoard(store)
 
-	issues, err := store.ListIssues()
-	if err != nil {
-		return err
+	msg := fetchRefresh(store)
+	refresh, ok := msg.(refreshMsg)
+	if !ok {
+		// fetchRefresh returned an errMsg
+		if e, isErr := msg.(errMsg); isErr {
+			return e.err
+		}
+		return nil
 	}
 
 	// Simulate initialization that normally happens via tea messages
@@ -48,7 +53,7 @@ func dumpBoard(store *beadslite.Store, width, height int, w io.Writer) error {
 	b.termHeight = height
 	b.help.Width = width
 	b.loaded = true
-	b.applyRefresh(issues)
+	b.applyRefresh(refresh)
 	b.cols[b.focused].Focus()
 	b.updatePan()
 	b.resizeColumns()

@@ -32,8 +32,11 @@ type errMsg struct {
 }
 
 // refreshMsg carries fresh issue data from a periodic SQLite poll.
+// blockedIDs is the set of issue IDs that have at least one unresolved blocker —
+// i.e. they depend on an issue that is not yet done.
 type refreshMsg struct {
-	issues []*beadslite.Issue
+	issues     []*beadslite.Issue
+	blockedIDs map[string]bool
 }
 
 // closeMsg carries a card closure request from the resolution picker to the board.
