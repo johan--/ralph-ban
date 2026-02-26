@@ -190,6 +190,10 @@ func scanActivity(heartbeatDir string, issues []*beadslite.Issue) []agentEntry {
 
 			elapsed := time.Duration(now-ts) * time.Second
 			cardIssue := doingCards[agentName]
+			if cardIssue == nil {
+				// Stale heartbeat with no doing card — skip.
+				continue
+			}
 			status := classifyStatus(elapsed, cardIssue)
 			entry := agentEntry{
 				name:     agentName,
