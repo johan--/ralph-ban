@@ -25,7 +25,6 @@ const (
 	viewSearch                      // cross-column search mode
 	viewResolution                  // resolution picker before closing a card
 	viewDepLink                     // dep-link picker: link focused card to a blocker
-	viewActivity                    // agent liveness table
 )
 
 // board is the root tea.Model for the kanban TUI.
@@ -44,7 +43,6 @@ type board struct {
 	detail       *detail
 	resolution   *resolutionPicker
 	depLinker    *depLinker
-	activityView activity
 
 	// Undo stack for moves, priority changes, edits, and deletes.
 	// Capped at maxUndoStack entries; oldest entry is dropped when full.
@@ -100,8 +98,7 @@ func newBoard(store *beadslite.Store) *board {
 		cols:         cols,
 		help:         h,
 		searchInput:  si,
-		wip:          wip,
-		activityView: newActivity(".ralph-ban/heartbeats"),
+		wip: wip,
 	}
 	b.cols[b.focused].Focus()
 	return b
@@ -136,29 +133,14 @@ func (b *board) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			b.resolution.width = msg.Width
 			b.resolution.height = msg.Height
 		}
-		var actCmd tea.Cmd
-		b.activityView, actCmd = b.activityView.Update(msg)
 		b.updatePan()
 		b.resizeColumns()
-		return b, actCmd
+		return b, nil
 
 	case refreshMsg:
 		b.err = nil
 		b.applyRefresh(msg)
-		// Piggyback an activity scan on every board refresh tick.
-		// The issues from this refresh are passed in so scanActivity
-		// can match heartbeat files to doing cards without a second store call.
-		issues := msg.issues
-		heartbeatDir := b.activityView.heartbeatDir
-		activityCmd := func() tea.Msg {
-			return activityRefreshMsg{entries: scanActivity(heartbeatDir, issues)}
-		}
-		return b, tea.Batch(tickRefresh(b.store), activityCmd)
-
-	case activityRefreshMsg:
-		var actCmd tea.Cmd
-		b.activityView, actCmd = b.activityView.Update(msg)
-		return b, actCmd
+		return b, tickRefresh(b.store)
 
 	case errMsg:
 		b.err = msg.err
@@ -187,8 +169,6 @@ func (b *board) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return b.updateResolution(msg)
 	case viewDepLink:
 		return b.updateDepLink(msg)
-	case viewActivity:
-		return b.updateActivity(msg)
 	}
 
 	switch msg := msg.(type) {
@@ -288,10 +268,6 @@ func (b *board) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			b.cycleFilter(-1)
 			return b, nil
 
-		case key.Matches(msg, keys.Activity):
-			b.view = viewActivity
-			return b, nil
-
 		case key.Matches(msg, keys.Back):
 			if b.filter.field != filterNone {
 				b.clearFilter()
@@ -326,8 +302,6 @@ func (b *board) View() string {
 		if b.depLinker != nil {
 			return b.depLinker.View()
 		}
-	case viewActivity:
-		return b.activityView.View()
 	}
 
 	// Build visible columns based on panning
@@ -1231,16 +1205,3 @@ func (b *board) applyActiveFilter() {
 	}
 }
 
-// updateActivity routes messages while the activity view is active.
-// Both 'a' and esc return to the board view.
-func (b *board) updateActivity(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if kmsg, ok := msg.(tea.KeyMsg); ok {
-		if key.Matches(kmsg, keys.Activity) || key.Matches(kmsg, keys.Back) {
-			b.view = viewBoard
-			return b, nil
-		}
-	}
-	var cmd tea.Cmd
-	b.activityView, cmd = b.activityView.Update(msg)
-	return b, cmd
-}
