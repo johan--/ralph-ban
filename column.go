@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
@@ -82,13 +84,21 @@ func newColumn(idx columnIndex) column {
 
 func (c *column) Focus() {
 	c.focus = true
-	c.list.SetDelegate(newFocusedDelegate())
+	if c.index == colDone {
+		c.list.SetDelegate(newFocusedDelegate())
+	} else {
+		c.list.SetDelegate(newFocusedAgeDelegate())
+	}
 }
 
 func (c *column) Blur() {
 	c.focus = false
 	c.confirmDelete = false
-	c.list.SetDelegate(newBlurredDelegate())
+	if c.index == colDone {
+		c.list.SetDelegate(newBlurredDelegate())
+	} else {
+		c.list.SetDelegate(newBlurredAgeDelegate())
+	}
 }
 
 func (c *column) Focused() bool { return c.focus }
@@ -236,6 +246,87 @@ func (c *column) deleteCurrent() tea.Cmd {
 	return func() tea.Msg {
 		return deleteMsg{id: cd.issue.ID}
 	}
+}
+
+// Age visualization
+
+// ageBucket classifies how long a card has been in its current column.
+type ageBucket int
+
+const (
+	ageFresh  ageBucket = iota // < 1 day: normal rendering
+	ageAging                   // 1–3 days: amber/yellow tint
+	ageStale                   // 3+ days: orange-red tint
+)
+
+// cardAgeBucket computes the age bucket from a card's UpdatedAt timestamp.
+// The caller is responsible for excluding Done column cards before calling.
+func cardAgeBucket(updatedAt time.Time) ageBucket {
+	age := time.Since(updatedAt)
+	switch {
+	case age >= 3*24*time.Hour:
+		return ageStale
+	case age >= 24*time.Hour:
+		return ageAging
+	default:
+		return ageFresh
+	}
+}
+
+var (
+	// agingTitleColor is an amber/yellow tint for cards aged 1–3 days.
+	agingTitleColor = lipgloss.Color("214")
+	// staleTitleColor is an orange-red tint for cards aged 3+ days.
+	staleTitleColor = lipgloss.Color("202")
+)
+
+// ageAwareDelegate wraps list.DefaultDelegate and overrides title color
+// per-item based on how long each card has sat in its column.
+type ageAwareDelegate struct {
+	list.DefaultDelegate
+}
+
+// Render prints the item with an age-based title color tint.
+// Fresh cards use the delegate's built-in styles unchanged.
+// Aging/stale cards have their title foreground overridden while preserving
+// all other style properties (padding, border, selection indicator).
+func (d ageAwareDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+	cd, ok := item.(card)
+	if !ok {
+		// Fall back to default rendering for non-card items.
+		d.DefaultDelegate.Render(w, m, index, item)
+		return
+	}
+
+	bucket := cardAgeBucket(cd.issue.UpdatedAt)
+	if bucket == ageFresh {
+		d.DefaultDelegate.Render(w, m, index, item)
+		return
+	}
+
+	var tintColor lipgloss.Color
+	switch bucket {
+	case ageAging:
+		tintColor = agingTitleColor
+	case ageStale:
+		tintColor = staleTitleColor
+	}
+
+	// Clone the delegate so we can mutate styles per-item without affecting
+	// the shared delegate state across multiple Render calls.
+	tinted := d.DefaultDelegate
+	tinted.Styles.NormalTitle = tinted.Styles.NormalTitle.Foreground(tintColor)
+	tinted.Styles.SelectedTitle = tinted.Styles.SelectedTitle.Foreground(tintColor)
+	tinted.Styles.DimmedTitle = tinted.Styles.DimmedTitle.Foreground(tintColor)
+	tinted.Render(w, m, index, item)
+}
+
+func newFocusedAgeDelegate() ageAwareDelegate {
+	return ageAwareDelegate{DefaultDelegate: newFocusedDelegate()}
+}
+
+func newBlurredAgeDelegate() ageAwareDelegate {
+	return ageAwareDelegate{DefaultDelegate: newBlurredDelegate()}
 }
 
 // Styling
