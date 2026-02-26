@@ -351,9 +351,8 @@ test_teammate_idle_allows_no_cards() {
   setup
   bl create "Unrelated Task" >/dev/null
   local input='{"teammate_name":"test-worker"}'
-  local out
+  local out exit_code
   out=$(echo "$input" | "$HOOKS_DIR/teammate-idle.sh" 2>/dev/null || true)
-  local exit_code
   echo "$input" | "$HOOKS_DIR/teammate-idle.sh" >/dev/null 2>&1
   exit_code=$?
   if [ "$exit_code" -eq 0 ]; then
@@ -362,6 +361,7 @@ test_teammate_idle_allows_no_cards() {
     FAIL=$((FAIL + 1))
     echo "FAIL: teammate-idle should allow exit when teammate has no claimed cards (got exit $exit_code)"
   fi
+  assert_contains "$out" "suppressOutput" "teammate-idle suppresses output when no active cards"
   teardown
 }
 
@@ -374,7 +374,9 @@ test_teammate_idle_blocks_active_cards() {
   bl claim "$id" --agent test-worker >/dev/null 2>&1 || true
 
   local input='{"teammate_name":"test-worker"}'
-  local exit_code=0
+  local out exit_code=0
+  # Capture stdout; stderr goes to a separate fd so assert_not_contains only sees stdout
+  out=$(echo "$input" | "$HOOKS_DIR/teammate-idle.sh" 2>/dev/null || true)
   echo "$input" | "$HOOKS_DIR/teammate-idle.sh" >/dev/null 2>&1 || exit_code=$?
   if [ "$exit_code" -eq 2 ]; then
     PASS=$((PASS + 1))
@@ -382,6 +384,7 @@ test_teammate_idle_blocks_active_cards() {
     FAIL=$((FAIL + 1))
     echo "FAIL: teammate-idle should exit 2 when teammate owns doing card (got exit $exit_code)"
   fi
+  assert_not_contains "$out" "suppressOutput" "teammate-idle does not suppress output when blocking"
   teardown
 }
 
@@ -396,7 +399,8 @@ test_teammate_idle_allows_review_only() {
   bl update "$id" --status review >/dev/null
 
   local input='{"teammate_name":"test-worker"}'
-  local exit_code=0
+  local out exit_code=0
+  out=$(echo "$input" | "$HOOKS_DIR/teammate-idle.sh" 2>/dev/null || true)
   echo "$input" | "$HOOKS_DIR/teammate-idle.sh" >/dev/null 2>&1 || exit_code=$?
   if [ "$exit_code" -eq 0 ]; then
     PASS=$((PASS + 1))
@@ -404,6 +408,43 @@ test_teammate_idle_allows_review_only() {
     FAIL=$((FAIL + 1))
     echo "FAIL: teammate-idle should allow exit when teammate only has review cards (got exit $exit_code)"
   fi
+  assert_contains "$out" "suppressOutput" "teammate-idle suppresses output when only review cards remain"
+  teardown
+}
+
+test_teammate_idle_suppresses_no_db() {
+  setup
+  # Remove the database so db_exists returns false — nothing to check
+  rm -f .beads.db
+  local input='{"teammate_name":"test-worker"}'
+  local out exit_code=0
+  out=$(echo "$input" | "$HOOKS_DIR/teammate-idle.sh" 2>/dev/null || true)
+  echo "$input" | "$HOOKS_DIR/teammate-idle.sh" >/dev/null 2>&1 || exit_code=$?
+  if [ "$exit_code" -eq 0 ]; then
+    PASS=$((PASS + 1))
+  else
+    FAIL=$((FAIL + 1))
+    echo "FAIL: teammate-idle should exit 0 when no db (got exit $exit_code)"
+  fi
+  assert_contains "$out" "suppressOutput" "teammate-idle suppresses output when no db"
+  teardown
+}
+
+test_teammate_idle_suppresses_no_teammate_name() {
+  setup
+  bl create "Some Task" >/dev/null
+  # Empty teammate name — nothing to check, suppress cleanly
+  local input='{"teammate_name":""}'
+  local out exit_code=0
+  out=$(echo "$input" | "$HOOKS_DIR/teammate-idle.sh" 2>/dev/null || true)
+  echo "$input" | "$HOOKS_DIR/teammate-idle.sh" >/dev/null 2>&1 || exit_code=$?
+  if [ "$exit_code" -eq 0 ]; then
+    PASS=$((PASS + 1))
+  else
+    FAIL=$((FAIL + 1))
+    echo "FAIL: teammate-idle should exit 0 when no teammate name (got exit $exit_code)"
+  fi
+  assert_contains "$out" "suppressOutput" "teammate-idle suppresses output when no teammate name"
   teardown
 }
 
@@ -631,6 +672,8 @@ test_stop_guard_blocks_teammate_uncommitted
 test_teammate_idle_allows_no_cards
 test_teammate_idle_blocks_active_cards
 test_teammate_idle_allows_review_only
+test_teammate_idle_suppresses_no_db
+test_teammate_idle_suppresses_no_teammate_name
 test_task_completed_allows_no_doing
 test_task_completed_blocks_doing_cards
 test_stop_guard_stall_detection_allows_after_max_stalls
