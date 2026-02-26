@@ -99,8 +99,16 @@ PHASE 5 - MERGE: After review approval
     Merge the worktree branch to main
     bl close <id>
   For rejected cards:
-    bl update <id> --status doing (with feedback from reviewer)
-    Optionally re-spawn worker with feedback
+    Read the card to surface persisted feedback: bl show <id>
+    The reviewer will have appended a "## Review Feedback" section to the
+    card description. Include that feedback verbatim in the worker's prompt
+    so they know exactly what to fix before they start.
+    bl update <id> --status doing
+    Re-spawn worker: Task tool (subagent_type: "worker", isolation: "worktree",
+      prompt: "Your card: <id> — <title>.
+               Previous review feedback (from card description):
+               <paste the ## Review Feedback section here>
+               Address all required fixes before moving to review again.")
   Clean up worktrees.
 </workflow>
 

@@ -37,7 +37,29 @@ You MUST NOT close the card — the orchestrator handles merging and closing.
 
 ### If rejected
 
-Report back to orchestrator with specific, actionable feedback:
+Before reporting back, persist the feedback to the card description so it
+survives session boundaries. Read the current description first, then append
+a `## Review Feedback` section:
+
+```
+bl show <id>
+# note the current description
+bl update <id> --description "<existing description>
+
+## Review Feedback (YYYY-MM-DD)
+**Rejected by**: reviewer
+**Reason**: <one-line summary>
+**Required fixes**:
+- <specific issue with file/line reference>
+- <specific issue with file/line reference>"
+```
+
+Use today's date in YYYY-MM-DD format. Keep the existing description intact —
+only append; never overwrite the original text. If a `## Review Feedback`
+section already exists (from a prior round), append a new dated block after it
+rather than replacing it.
+
+Then report back to orchestrator with the same specific, actionable feedback:
 - What needs to change and why
 - Reference specific files and line numbers
 - Distinguish between blocking issues and suggestions
