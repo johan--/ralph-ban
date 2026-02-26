@@ -4,10 +4,9 @@
 # Run from ralph-ban root: bash test_cli_integration.sh
 set -euo pipefail
 
-# Use the locally built bl binary (not the installed system one).
-# Build it first: cd ../beads-lite && go build -o /tmp/bl-test ./cmd/bl
+# Use the system bl binary (built by `just build-bl`).
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-BL="${BL:-/tmp/bl-test}"
+BL="${BL:-/usr/local/bin/bl}"
 if [ ! -x "$BL" ]; then
   echo "Building beads-lite..."
   (cd "$SCRIPT_DIR/../beads-lite" && go build -o "$BL" ./cmd/bl)
@@ -26,6 +25,8 @@ TEST_DIR=""
 setup() {
   TEST_DIR=$(mktemp -d)
   cd "$TEST_DIR"
+  # Isolate from parent environment — BL_ROOT leaks from ./ralph-ban claude
+  unset BL_ROOT
   bl init >/dev/null 2>&1
 }
 

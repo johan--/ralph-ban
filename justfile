@@ -1,7 +1,7 @@
 # ralph-ban: TUI kanban board backed by beads-lite
 
 bin       := "ralph-ban"
-bl_bin    := "/tmp/bl-test"
+bl_bin    := "/usr/local/bin/bl"
 bl_src    := "../beads-lite"
 
 # List available recipes

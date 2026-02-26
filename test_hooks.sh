@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 HOOKS_DIR="$SCRIPT_DIR/hooks"
 
 # Use locally built bl — export so hook scripts see it via ${BL:-bl}
-BL="${BL:-/tmp/bl-test}"
+BL="${BL:-/usr/local/bin/bl}"
 export BL
 if [ ! -x "$BL" ]; then
   echo "Building beads-lite..."
