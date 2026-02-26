@@ -9,17 +9,6 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/board-state.sh"
 require_bl
 
-# Clean up stale agent worktrees from previous sessions that crashed or were interrupted.
-# Runs silently before the board snapshot so accumulation doesn't require manual intervention.
-# Only run from the main checkout — workers in linked worktrees must not clean up other workers'
-# directories. In the main checkout, --show-toplevel and the resolved parent of --git-common-dir
-# are the same path; in a linked worktree they differ.
-_TOPLEVEL="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-_COMMON_PARENT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null || echo '.')" 2>/dev/null && dirname "$(pwd)" || true)"
-if [ "$_TOPLEVEL" = "$_COMMON_PARENT" ]; then
-  "${_GIT_ROOT}/scripts/cleanup-worktrees.sh" >/dev/null 2>&1 || true
-fi
-
 # Save initial snapshot for future diffs
 save_snapshot
 
