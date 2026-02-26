@@ -29,6 +29,9 @@ Agent coordination:
 
 <workflow>
 PHASE 1 - ASSESS: Check the board, plan the work
+  First, clean up stale worktrees from any previous session:
+    bash scripts/cleanup-worktrees.sh
+  Then check the board:
   bl ready --json -> see available cards
   bl list --tree -> understand dependencies
   Identify cards that can be worked in parallel.
@@ -126,7 +129,8 @@ PHASE 5 - MERGE: After review approval
                Previous review feedback (from card description):
                <paste the ## Review Feedback section here>
                Address all required fixes before moving to review again.")
-  Clean up worktrees.
+  Clean up worktrees after merges and rejections:
+    bash scripts/cleanup-worktrees.sh
 </workflow>
 
 <hooks>
