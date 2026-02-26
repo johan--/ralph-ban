@@ -8,6 +8,7 @@ trap 'echo "{\"hookSpecificOutput\":{\"hookEventName\":\"UserPromptSubmit\",\"ad
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/board-state.sh"
+source "$SCRIPT_DIR/lib/heartbeat.sh"
 
 # Check if bl is available
 BL="${BL:-bl}"
@@ -125,6 +126,14 @@ record_card_progress
 stall_warnings=""
 stall_warnings=$(detect_stalled_cards)
 
+# --- Heartbeat stall detection: check for unresponsive worker agents ---
+# Workers write a timestamp on every UserPromptSubmit. A file older than
+# HEARTBEAT_STALE_SECONDS (default 5 min) means the agent has gone silent
+# while still holding a doing card — likely hung or crashed.
+board_state_for_heartbeat=$(read_board)
+heartbeat_warnings=""
+heartbeat_warnings=$(detect_stalled_heartbeats "$board_state_for_heartbeat")
+
 # Build the system message from available parts
 parts=()
 if [ -n "$breaker_warning" ]; then
@@ -147,6 +156,10 @@ if [ -n "$stall_warnings" ]; then
   parts+=("STALL DETECTED:")
   parts+=("$stall_warnings")
 fi
+if [ -n "$heartbeat_warnings" ]; then
+  parts+=("WORKER HEARTBEAT STALL:")
+  parts+=("$heartbeat_warnings")
+fi
 
 if [ ${#parts[@]} -gt 0 ]; then
   # User-visible summary: just the parts, no orchestration framing.
@@ -157,3 +170,8 @@ if [ ${#parts[@]} -gt 0 ]; then
   jq -n --arg ctx "$agent_message" --arg msg "$user_message" \
     '{hookSpecificOutput: {hookEventName: "UserPromptSubmit", additionalContext: $ctx}, systemMessage: $msg}'
 fi
+
+# Write this agent's heartbeat and clean up stale files for completed agents.
+# Done after output so heartbeat I/O doesn't affect hook exit status.
+write_heartbeat
+cleanup_heartbeats "$board_state_for_heartbeat"
