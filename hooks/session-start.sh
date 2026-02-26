@@ -19,6 +19,10 @@ if ! db_exists; then
   exit 0
 fi
 
+# Clean up stale agent worktrees from previous sessions that crashed or were interrupted.
+# Runs silently before the board snapshot so accumulation doesn't require manual intervention.
+"${_GIT_ROOT}/scripts/cleanup-worktrees.sh" >/dev/null 2>&1 || true
+
 # Save initial snapshot for future diffs
 save_snapshot
 
