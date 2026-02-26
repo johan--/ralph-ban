@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -169,4 +170,93 @@ func TestApplyFilterToItems(t *testing.T) {
 			t.Errorf("got %d items, want 0", len(out))
 		}
 	})
+}
+
+func TestFilterStepLabel(t *testing.T) {
+	tests := []struct {
+		filter activeFilter
+		want   string
+	}{
+		{activeFilter{field: filterNone}, "all"},
+		{activeFilter{field: filterPriority, value: "P1"}, "P1"},
+		{activeFilter{field: filterType, value: "bug"}, "bug"},
+		{activeFilter{field: filterAssignee, value: "alice"}, "alice"},
+	}
+	for _, tt := range tests {
+		got := filterStepLabel(tt.filter)
+		if got != tt.want {
+			t.Errorf("filterStepLabel(%v) = %q, want %q", tt.filter, got, tt.want)
+		}
+	}
+}
+
+func TestFilterCycleViewContainsActive(t *testing.T) {
+	issues := []*beadslite.Issue{
+		makeFilterIssue("a", 1, beadslite.IssueTypeTask, ""),
+		makeFilterIssue("b", 2, beadslite.IssueTypeBug, ""),
+		makeFilterIssue("c", 3, beadslite.IssueTypeFeature, "alice"),
+	}
+
+	t.Run("no filter shows all label in brackets", func(t *testing.T) {
+		view := filterCycleView(activeFilter{field: filterNone}, issues, 7)
+		if !containsString(view, "[all]") {
+			t.Errorf("expected [all] in view, got: %q", stripAnsi(view))
+		}
+	})
+
+	t.Run("priority filter shows bracketed value", func(t *testing.T) {
+		f := activeFilter{field: filterPriority, value: "P1"}
+		view := filterCycleView(f, issues, 7)
+		if !containsString(view, "[P1]") {
+			t.Errorf("expected [P1] in view, got: %q", stripAnsi(view))
+		}
+	})
+
+	t.Run("shows hint text", func(t *testing.T) {
+		view := filterCycleView(activeFilter{field: filterNone}, issues, 7)
+		if !containsString(view, "f/F cycle") {
+			t.Errorf("expected hint text in view, got: %q", stripAnsi(view))
+		}
+	})
+
+	t.Run("shows ellipsis when window is smaller than step count", func(t *testing.T) {
+		// With 7 issues to get many steps and maxVisible=3, ellipsis should appear
+		manyIssues := []*beadslite.Issue{
+			makeFilterIssue("a", 0, beadslite.IssueTypeTask, ""),
+			makeFilterIssue("b", 1, beadslite.IssueTypeBug, ""),
+			makeFilterIssue("c", 2, beadslite.IssueTypeFeature, ""),
+			makeFilterIssue("d", 3, beadslite.IssueTypeEpic, "alice"),
+		}
+		// Active at P3 (last priority step) so there's content to the left
+		f := activeFilter{field: filterPriority, value: "P3"}
+		view := filterCycleView(f, manyIssues, 3)
+		if !containsString(view, "…") {
+			t.Errorf("expected ellipsis in view when window is truncated, got: %q", stripAnsi(view))
+		}
+	})
+}
+
+// containsString checks whether s contains substr, ignoring ANSI escape sequences.
+func containsString(s, substr string) bool {
+	return strings.Contains(s, substr) || strings.Contains(stripAnsi(s), substr)
+}
+
+// stripAnsi removes ANSI escape sequences from s for plain-text comparison in tests.
+func stripAnsi(s string) string {
+	var out strings.Builder
+	inEscape := false
+	for _, r := range s {
+		if r == '\x1b' {
+			inEscape = true
+			continue
+		}
+		if inEscape {
+			if r == 'm' {
+				inEscape = false
+			}
+			continue
+		}
+		out.WriteRune(r)
+	}
+	return out.String()
 }

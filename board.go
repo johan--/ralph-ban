@@ -353,15 +353,12 @@ func (b *board) View() string {
 	var footerView string
 	if b.view == viewSearch {
 		footerView = b.searchBarView()
+	} else if b.filter.field != filterNone {
+		// When a filter is active, replace the help bar with the cycle indicator
+		// so the user can see where they are in the filter cycle.
+		footerView = filterCycleView(b.filter, b.allIssues, 7)
 	} else {
 		footerView = b.help.View(keys)
-		if b.filter.field != filterNone {
-			filterIndicator := lipgloss.NewStyle().
-				Foreground(lipgloss.Color("214")).
-				Bold(true).
-				Render("filter: " + b.filter.label())
-			footerView = filterIndicator + "  " + footerView
-		}
 	}
 
 	full := lipgloss.JoinVertical(lipgloss.Left,

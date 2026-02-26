@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/lipgloss"
 	beadslite "github.com/kylesnowschwartz/beads-lite"
 )
 
@@ -126,6 +128,88 @@ func prevFilter(current activeFilter, issues []*beadslite.Issue) activeFilter {
 	}
 
 	return activeFilter{field: filterNone}
+}
+
+// filterStepLabel returns a short display name for a filter step.
+// "none" becomes "all", priority/type/assignee values are used as-is.
+func filterStepLabel(f activeFilter) string {
+	if f.field == filterNone {
+		return "all"
+	}
+	return f.value
+}
+
+// filterCycleView renders a compact cycle indicator for the footer.
+// It shows up to maxVisible steps centred around the active step, with
+// "..." on either side when more steps exist beyond the window.
+// The active step is highlighted. Example output:
+//
+//	filter: … P0 | [P1] | P2 | P3 …   f/F cycle · esc clear
+func filterCycleView(current activeFilter, issues []*beadslite.Issue, maxVisible int) string {
+	steps := buildFilterSteps(issues)
+	if len(steps) == 0 {
+		return ""
+	}
+
+	// Find the index of the active filter.
+	activeIdx := 0
+	for i, s := range steps {
+		if s.field == current.field && s.value == current.value {
+			activeIdx = i
+			break
+		}
+	}
+
+	// Calculate the window of steps to show, centred on activeIdx.
+	half := maxVisible / 2
+	start := activeIdx - half
+	end := activeIdx + (maxVisible - half)
+	if start < 0 {
+		end -= start // shift right
+		start = 0
+	}
+	if end > len(steps) {
+		diff := end - len(steps)
+		start -= diff // shift left
+		end = len(steps)
+		if start < 0 {
+			start = 0
+		}
+	}
+
+	hasLeft := start > 0
+	hasRight := end < len(steps)
+
+	activeStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("214")).
+		Bold(true)
+	dimStyle := lipgloss.NewStyle().Faint(true)
+	labelStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("214")).
+		Bold(true)
+
+	var parts []string
+	for i := start; i < end; i++ {
+		s := steps[i]
+		lbl := filterStepLabel(s)
+		if i == activeIdx {
+			parts = append(parts, activeStyle.Render("["+lbl+"]"))
+		} else {
+			parts = append(parts, dimStyle.Render(lbl))
+		}
+	}
+
+	strip := strings.Join(parts, dimStyle.Render(" | "))
+	if hasLeft {
+		strip = dimStyle.Render("… ") + strip
+	}
+	if hasRight {
+		strip = strip + dimStyle.Render(" …")
+	}
+
+	hint := dimStyle.Render("  f/F cycle · esc clear")
+
+	return labelStyle.Render("filter: ") + strip + hint
 }
 
 // applyFilterToItems returns only the items that pass the filter.
