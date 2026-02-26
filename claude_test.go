@@ -1,6 +1,9 @@
 package main
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -115,5 +118,62 @@ func TestBuildClaudeArgs(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestSetConfigField_CreatesNewFile(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "config-dir")
+
+	if err := setConfigField(dir, "stop_mode", "autonomous"); err != nil {
+		t.Fatalf("setConfigField: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, "config.json"))
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+
+	var cfg map[string]any
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if cfg["stop_mode"] != "autonomous" {
+		t.Errorf("stop_mode = %v, want autonomous", cfg["stop_mode"])
+	}
+}
+
+func TestSetConfigField_PreservesExistingFields(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+
+	// Write existing config with WIP limits.
+	existing := `{"wip_limits": {"doing": 3}}`
+	if err := os.WriteFile(path, []byte(existing), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	if err := setConfigField(dir, "stop_mode", "batch"); err != nil {
+		t.Fatalf("setConfigField: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+
+	var cfg map[string]any
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if cfg["stop_mode"] != "batch" {
+		t.Errorf("stop_mode = %v, want batch", cfg["stop_mode"])
+	}
+	// WIP limits should survive the merge.
+	limits, ok := cfg["wip_limits"].(map[string]any)
+	if !ok {
+		t.Fatalf("wip_limits missing or wrong type after setConfigField")
+	}
+	if limits["doing"] != float64(3) {
+		t.Errorf("wip_limits.doing = %v, want 3", limits["doing"])
 	}
 }

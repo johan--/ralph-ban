@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -20,6 +21,7 @@ func runClaude(args []string) {
 	teammateMode := fs.String("teammate-mode", "in-process", "teammate display mode (in-process, split-pane, auto)")
 	prompt := fs.String("prompt", "", "override the initial prompt sent to claude")
 	resume := fs.String("resume", "", "resume a session by ID, or pass empty string for interactive picker")
+	stopMode := fs.String("stop-mode", "", "stop hook mode: 'batch' (stop after dispatched work) or 'autonomous' (work until board empty)")
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: ralph-ban claude [flags]\n\nStart a Claude Code session with board orchestrator role.\n\nFlags:\n")
 		fs.PrintDefaults()
@@ -42,6 +44,13 @@ func runClaude(args []string) {
 	// The settings file uses $BL_ROOT to reference hook scripts, so it works
 	// for workers in worktrees even though their cwd differs from the project root.
 	settingsPath := filepath.Join(pluginDir, ".claude-plugin", "settings.json")
+
+	// Write stop_mode to config before launching so the stop hook sees it immediately.
+	if *stopMode != "" {
+		if err := setConfigField(".ralph-ban", "stop_mode", *stopMode); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: could not write stop_mode to config: %v\n", err)
+		}
+	}
 
 	claudeArgs := buildClaudeArgs(pluginDir, settingsPath, *model, *autonomous, *teammateMode, *prompt, *resume)
 
@@ -126,4 +135,29 @@ func findPluginDir() (string, error) {
 	}
 
 	return "", fmt.Errorf("no .claude-plugin/plugin.json found near binary or in cwd")
+}
+
+// setConfigField reads .ralph-ban/config.json, sets a top-level field, and writes
+// it back. Creates the directory and file if they don't exist. Preserves all
+// existing fields (WIP limits, etc.) — only the named field is touched.
+func setConfigField(dataDir, key, value string) error {
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		return err
+	}
+
+	path := filepath.Join(dataDir, "config.json")
+
+	// Read existing config as a generic map to preserve unknown fields.
+	cfg := make(map[string]any)
+	if data, err := os.ReadFile(path); err == nil {
+		json.Unmarshal(data, &cfg) // ignore parse errors — overwrite with merged result
+	}
+
+	cfg[key] = value
+
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, append(data, '\n'), 0644)
 }
