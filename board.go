@@ -127,7 +127,7 @@ func (b *board) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case refreshMsg:
 		b.err = nil
-		b.applyRefresh(msg.issues)
+		b.applyRefresh(msg)
 		return b, tickRefresh(b.store)
 
 	case errMsg:
@@ -306,19 +306,15 @@ func (b *board) View() string {
 // loadFromStore returns a command that loads all issues and sets up column items.
 func (b *board) loadFromStore() tea.Cmd {
 	return func() tea.Msg {
-		issues, err := b.store.ListIssues()
-		if err != nil {
-			return errMsg{err}
-		}
-		return refreshMsg{issues: issues}
+		return fetchRefresh(b.store)
 	}
 }
 
 // applyRefresh partitions issues by status and updates column lists.
 // When search is active, the full item set is stashed in allItems and only
 // matching items are shown so the live filter stays consistent across polls.
-func (b *board) applyRefresh(issues []*beadslite.Issue) {
-	buckets := partitionByStatus(issues)
+func (b *board) applyRefresh(msg refreshMsg) {
+	buckets := partitionByStatus(msg.issues, msg.blockedIDs)
 	for i := columnIndex(0); i < numColumns; i++ {
 		items := buckets[i]
 		if items == nil {

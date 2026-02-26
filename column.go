@@ -286,8 +286,9 @@ type ageAwareDelegate struct {
 	list.DefaultDelegate
 }
 
-// Render prints the item with an age-based title color tint.
-// Fresh cards use the delegate's built-in styles unchanged.
+// Render prints the item with age-based title color tint and blocked dimming.
+// Blocked cards are rendered faint/dim to signal they cannot be acted on.
+// Fresh unblocked cards use the delegate's built-in styles unchanged.
 // Aging/stale cards have their title foreground overridden while preserving
 // all other style properties (padding, border, selection indicator).
 func (d ageAwareDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
@@ -298,9 +299,24 @@ func (d ageAwareDelegate) Render(w io.Writer, m list.Model, index int, item list
 		return
 	}
 
+	// Clone the delegate so we can mutate styles per-item without affecting
+	// the shared delegate state across multiple Render calls.
+	local := d.DefaultDelegate
+
+	// Blocked cards: apply faint/dim styling so they visually recede.
+	// This is layered on top of any age tinting applied below.
+	if cd.blocked {
+		local.Styles.NormalTitle = local.Styles.NormalTitle.Faint(true)
+		local.Styles.NormalDesc = local.Styles.NormalDesc.Faint(true)
+		local.Styles.SelectedTitle = local.Styles.SelectedTitle.Faint(true)
+		local.Styles.SelectedDesc = local.Styles.SelectedDesc.Faint(true)
+		local.Styles.DimmedTitle = local.Styles.DimmedTitle.Faint(true)
+		local.Styles.DimmedDesc = local.Styles.DimmedDesc.Faint(true)
+	}
+
 	bucket := cardAgeBucket(cd.issue.UpdatedAt)
 	if bucket == ageFresh {
-		d.DefaultDelegate.Render(w, m, index, item)
+		local.Render(w, m, index, item)
 		return
 	}
 
@@ -312,13 +328,10 @@ func (d ageAwareDelegate) Render(w io.Writer, m list.Model, index int, item list
 		tintColor = staleTitleColor
 	}
 
-	// Clone the delegate so we can mutate styles per-item without affecting
-	// the shared delegate state across multiple Render calls.
-	tinted := d.DefaultDelegate
-	tinted.Styles.NormalTitle = tinted.Styles.NormalTitle.Foreground(tintColor)
-	tinted.Styles.SelectedTitle = tinted.Styles.SelectedTitle.Foreground(tintColor)
-	tinted.Styles.DimmedTitle = tinted.Styles.DimmedTitle.Foreground(tintColor)
-	tinted.Render(w, m, index, item)
+	local.Styles.NormalTitle = local.Styles.NormalTitle.Foreground(tintColor)
+	local.Styles.SelectedTitle = local.Styles.SelectedTitle.Foreground(tintColor)
+	local.Styles.DimmedTitle = local.Styles.DimmedTitle.Foreground(tintColor)
+	local.Render(w, m, index, item)
 }
 
 func newFocusedAgeDelegate() ageAwareDelegate {

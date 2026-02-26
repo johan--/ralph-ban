@@ -37,7 +37,7 @@ func makeIssue(id, title string, status beadslite.Status) *beadslite.Issue {
 // --- partitionByStatus ---
 
 func TestPartitionByStatus_Empty(t *testing.T) {
-	buckets := partitionByStatus(nil)
+	buckets := partitionByStatus(nil, nil)
 	for i := columnIndex(0); i < numColumns; i++ {
 		if len(buckets[i]) != 0 {
 			t.Errorf("column %d has %d items, want 0", i, len(buckets[i]))
@@ -54,7 +54,7 @@ func TestPartitionByStatus_AllColumns(t *testing.T) {
 		makeIssue("bl-05", "Done Item", beadslite.StatusDone),
 	}
 
-	buckets := partitionByStatus(issues)
+	buckets := partitionByStatus(issues, nil)
 
 	expected := map[columnIndex]string{
 		colBacklog: "bl-01",
@@ -83,7 +83,7 @@ func TestPartitionByStatus_MultiplePerColumn(t *testing.T) {
 		makeIssue("bl-03", "Todo C", beadslite.StatusTodo),
 	}
 
-	buckets := partitionByStatus(issues)
+	buckets := partitionByStatus(issues, nil)
 
 	if len(buckets[colTodo]) != 3 {
 		t.Errorf("todo column has %d items, want 3", len(buckets[colTodo]))
@@ -110,7 +110,7 @@ func TestPartitionByStatus_PrioritySorting(t *testing.T) {
 	// Feed them in deliberately wrong order to prove sorting works.
 	issues := []*beadslite.Issue{p4, p0, p2}
 
-	buckets := partitionByStatus(issues)
+	buckets := partitionByStatus(issues, nil)
 
 	todoItems := buckets[colTodo]
 	if len(todoItems) != 3 {
@@ -144,7 +144,7 @@ func TestPartitionByStatus_UnknownStatusSkipped(t *testing.T) {
 		},
 	}
 
-	buckets := partitionByStatus(issues)
+	buckets := partitionByStatus(issues, nil)
 
 	total := 0
 	for i := columnIndex(0); i < numColumns; i++ {
@@ -446,6 +446,103 @@ func TestMigration_OldStatuses(t *testing.T) {
 	// (migration happens at DB open, not import)
 	issues, _ := store.ListIssues()
 	t.Logf("imported %d issues with old statuses", len(issues))
+}
+
+// --- blocked card rendering ---
+
+// TestPartitionByStatus_BlockedCards verifies that issues in blockedIDs get
+// card.blocked = true and others stay false.
+func TestPartitionByStatus_BlockedCards(t *testing.T) {
+	issues := []*beadslite.Issue{
+		makeIssue("bl-a", "Blocked Card", beadslite.StatusTodo),
+		makeIssue("bl-b", "Free Card", beadslite.StatusTodo),
+	}
+	blockedIDs := map[string]bool{"bl-a": true}
+
+	buckets := partitionByStatus(issues, blockedIDs)
+
+	todo := buckets[colTodo]
+	if len(todo) != 2 {
+		t.Fatalf("todo has %d items, want 2", len(todo))
+	}
+
+	// Priority sort puts bl-a and bl-b in stable order (both P2); find by ID.
+	cardsByID := make(map[string]card)
+	for _, item := range todo {
+		c := item.(card)
+		cardsByID[c.issue.ID] = c
+	}
+
+	if !cardsByID["bl-a"].blocked {
+		t.Error("bl-a should be blocked, got blocked=false")
+	}
+	if cardsByID["bl-b"].blocked {
+		t.Error("bl-b should not be blocked, got blocked=true")
+	}
+}
+
+// TestComputeBlockedIDs verifies the blocking logic end-to-end with a real store.
+func TestComputeBlockedIDs(t *testing.T) {
+	store := newTestStore(t)
+
+	blocker := makeIssue("bl-blocker", "Blocker", beadslite.StatusTodo)
+	blocked := makeIssue("bl-blocked", "Blocked", beadslite.StatusTodo)
+	free := makeIssue("bl-free", "Free", beadslite.StatusTodo)
+	done := makeIssue("bl-done-blocker", "Done blocker", beadslite.StatusDone)
+	freedByDone := makeIssue("bl-freed", "Freed by done", beadslite.StatusTodo)
+
+	for _, issue := range []*beadslite.Issue{blocker, blocked, free, done, freedByDone} {
+		if err := store.CreateIssue(issue); err != nil {
+			t.Fatalf("CreateIssue(%s): %v", issue.ID, err)
+		}
+	}
+
+	// bl-blocked is blocked by bl-blocker (not done)
+	if err := store.AddDependency("bl-blocked", "bl-blocker", beadslite.DepBlocks); err != nil {
+		t.Fatalf("AddDependency: %v", err)
+	}
+	// bl-freed is blocked by bl-done-blocker (done — so bl-freed should NOT be blocked)
+	if err := store.AddDependency("bl-freed", "bl-done-blocker", beadslite.DepBlocks); err != nil {
+		t.Fatalf("AddDependency: %v", err)
+	}
+
+	issues, err := store.ListIssues()
+	if err != nil {
+		t.Fatalf("ListIssues: %v", err)
+	}
+
+	blockedIDs := computeBlockedIDs(store, issues)
+
+	if !blockedIDs["bl-blocked"] {
+		t.Error("bl-blocked should appear in blockedIDs")
+	}
+	if blockedIDs["bl-free"] {
+		t.Error("bl-free should not appear in blockedIDs")
+	}
+	if blockedIDs["bl-freed"] {
+		t.Error("bl-freed should not appear in blockedIDs (its blocker is done)")
+	}
+	if blockedIDs["bl-blocker"] {
+		t.Error("bl-blocker should not appear in blockedIDs (it has no blockers)")
+	}
+}
+
+// TestCard_Description_Blocked checks that the lock indicator appears.
+func TestCard_Description_Blocked(t *testing.T) {
+	issue := makeIssue("bl-x", "Test", beadslite.StatusTodo)
+
+	free := card{issue: issue, blocked: false}
+	blocked := card{issue: issue, blocked: true}
+
+	freeDesc := free.Description()
+	blockedDesc := blocked.Description()
+
+	if strings.Contains(freeDesc, "[locked]") {
+		t.Errorf("free card description should not contain [locked]: %q", freeDesc)
+	}
+	if !strings.Contains(blockedDesc, "[locked]") {
+		t.Errorf("blocked card description should contain [locked]: %q", blockedDesc)
+	}
 }
 
 // Verify list.Item interface compliance at compile time

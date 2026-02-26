@@ -19,19 +19,23 @@ func loadIssues(store *beadslite.Store) ([numColumns][]list.Item, error) {
 	if err != nil {
 		return [numColumns][]list.Item{}, err
 	}
-	return partitionByStatus(issues), nil
+	return partitionByStatus(issues, nil), nil
 }
 
 // partitionByStatus sorts issues into column buckets by status,
 // with cards sorted by priority within each column (P0 first).
-func partitionByStatus(issues []*beadslite.Issue) [numColumns][]list.Item {
+// blockedIDs marks which issues have unresolved blockers; pass nil to skip.
+func partitionByStatus(issues []*beadslite.Issue, blockedIDs map[string]bool) [numColumns][]list.Item {
 	var buckets [numColumns][]list.Item
 	for _, issue := range issues {
 		col, ok := statusToColumn[issue.Status]
 		if !ok {
 			continue // skip unknown statuses
 		}
-		buckets[col] = append(buckets[col], card{issue: issue})
+		buckets[col] = append(buckets[col], card{
+			issue:   issue,
+			blocked: blockedIDs[issue.ID],
+		})
 	}
 	for i := range buckets {
 		sort.Slice(buckets[i], func(a, b int) bool {
@@ -100,12 +104,57 @@ func persistClose(store *beadslite.Store, id string, resolution beadslite.Resolu
 }
 
 // tickRefresh starts the polling loop that reloads from SQLite every refreshInterval.
+// Each tick fetches issues and dependencies in two queries, then computes which
+// issues have at least one unresolved blocker (a blocker that is not done).
 func tickRefresh(store *beadslite.Store) tea.Cmd {
 	return tea.Tick(refreshInterval, func(time.Time) tea.Msg {
-		issues, err := store.ListIssues()
-		if err != nil {
-			return errMsg{err}
-		}
-		return refreshMsg{issues: issues}
+		return fetchRefresh(store)
 	})
+}
+
+// fetchRefresh executes the two queries needed for a full refresh and returns
+// a refreshMsg. Factored out so board.loadFromStore can reuse the same logic.
+func fetchRefresh(store *beadslite.Store) tea.Msg {
+	issues, err := store.ListIssues()
+	if err != nil {
+		return errMsg{err}
+	}
+	blockedIDs := computeBlockedIDs(store, issues)
+	return refreshMsg{issues: issues, blockedIDs: blockedIDs}
+}
+
+// computeBlockedIDs returns the set of issue IDs that have at least one
+// unresolved blocks-type dependency (i.e. the blocker issue is not done).
+// A single call to GetAllDependencies gives us everything needed without N+1 queries.
+func computeBlockedIDs(store *beadslite.Store, issues []*beadslite.Issue) map[string]bool {
+	allDeps, err := store.GetAllDependencies()
+	if err != nil {
+		// Fail open: if we can't read deps, show no cards as blocked.
+		return nil
+	}
+
+	// Build a status index so blocker resolution is O(1).
+	statusOf := make(map[string]beadslite.Status, len(issues))
+	for _, issue := range issues {
+		statusOf[issue.ID] = issue.Status
+	}
+
+	blocked := make(map[string]bool)
+	for issueID, deps := range allDeps {
+		for _, dep := range deps {
+			if dep.Type != beadslite.DepBlocks {
+				continue
+			}
+			blockerStatus, known := statusOf[dep.DependsOnID]
+			if !known {
+				// Dangling reference — treat as unresolved to be conservative.
+				blocked[issueID] = true
+				continue
+			}
+			if blockerStatus != beadslite.StatusDone {
+				blocked[issueID] = true
+			}
+		}
+	}
+	return blocked
 }
