@@ -25,22 +25,32 @@ source "$SCRIPT_DIR/lib/board-state.sh"
 # Early-exit blocks (uncommitted changes, anti-loop, team bypass) bypass this —
 # they are always relevant. Only board-state blocks at the bottom are debounced.
 #
-# Takes JSON on stdin. If systemMessage content matches the last emission,
-# strips systemMessage from the output (decision+reason still flow through).
-# When the message is new, saves the hash and emits the full JSON.
+# Takes JSON on stdin. If systemMessage content matches the last emission AND
+# that emission was within the last 60 seconds, strips systemMessage from the
+# output (decision+reason still flow through). After 60 seconds the window
+# expires and the orchestrator gets the full guidance again — suppressing
+# indefinitely would silently drop actionable guidance on repeated stop attempts.
+#
+# State file stores "hash:timestamp" on a single line.
 debounce_stop_message() {
   local json
   json=$(cat)
   local msg_hash
   msg_hash=$(echo "$json" | jq -r '.systemMessage // ""' | shasum -a 256 | cut -d' ' -f1)
-  local last_hash
-  last_hash=$(cat "$STOP_MSG_HASH_FILE" 2>/dev/null || echo "")
 
-  if [ "$msg_hash" = "$last_hash" ]; then
-    # Same message — strip systemMessage to reduce noise
+  local stored last_hash last_ts now elapsed
+  stored=$(cat "$STOP_MSG_HASH_FILE" 2>/dev/null || echo "")
+  last_hash=$(echo "$stored" | cut -d: -f1)
+  last_ts=$(echo "$stored" | cut -d: -f2)
+  now=$(date +%s)
+  elapsed=$(( now - ${last_ts:-0} ))
+
+  if [ "$msg_hash" = "$last_hash" ] && [ "$elapsed" -lt 60 ]; then
+    # Same message within the debounce window — strip systemMessage to reduce noise
     echo "$json" | jq 'del(.systemMessage)'
   else
-    echo "$msg_hash" > "$STOP_MSG_HASH_FILE"
+    # New message or window expired — emit full JSON and record hash + timestamp
+    echo "${msg_hash}:${now}" > "$STOP_MSG_HASH_FILE"
     echo "$json"
   fi
 }
