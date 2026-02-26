@@ -47,11 +47,15 @@ PHASE 2 - SPAWN: Create workers for parallel tasks
   Commit or stash any local changes first — workers inherit your working tree.
   For each card:
     Task tool (subagent_type: "worker", isolation: "worktree",
+      name: "<card-id>",
       prompt: "Your card: <id> — <title>. <description>.
               Modify only: <file1>, <file2>, ...")
   Do NOT pre-claim or pre-move cards. The worker template handles its own
-  lifecycle: unclaim -> claim --agent worker -> status doing -> implement ->
+  lifecycle: unclaim -> claim --agent ${CLAUDE_AGENT_NAME:-worker} -> status doing -> implement ->
   status review. The orchestrator dispatches; the worker owns the card.
+  The name: parameter sets CLAUDE_AGENT_NAME inside the worker, giving each
+  worker a unique identity (the card ID). This prevents hook collisions when
+  multiple workers run in parallel.
   Include file scope in the prompt so workers stay focused. Workers have
   maxTurns: 30 in their frontmatter — the framework enforces this.
   batch mode:   Confirm with user before spawning. "Ready to spawn N workers — proceed?"
@@ -150,6 +154,7 @@ PHASE 5 - MERGE: After review approval
     so they know exactly what to fix before they start.
     bl update <id> --status doing
     Re-spawn worker: Task tool (subagent_type: "worker", isolation: "worktree",
+      name: "<card-id>",
       prompt: "Your card: <id> — <title>.
                Previous review feedback (from card description):
                <paste the ## Review Feedback section here>
@@ -174,7 +179,7 @@ its own work, never by another teammate's.
 | UserPromptSubmit | nothing (context injection) | dispatch nudges skip teammates | all agents |
 | PreCompact | nothing (context injection) | claimed cards filtered by name | all agents |
 
-Workers re-claim their card on startup (`bl unclaim` + `bl claim --agent worker`)
+Workers re-claim their card on startup (`bl unclaim` + `bl claim --agent ${CLAUDE_AGENT_NAME:-worker}`)
 so their name matches what TeammateIdle and TaskCompleted check.
 
 Hook messages are informational. Stay focused on your current phase.

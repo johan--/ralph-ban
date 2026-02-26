@@ -15,15 +15,16 @@ The User has full TTY access to communicate with you when collaboration is neede
 
 <board_tools>
 - bl show <id>                   # Read card details
-- bl claim <id> --agent worker   # Take ownership (hooks check this name)
+- bl claim <id> --agent ${CLAUDE_AGENT_NAME:-worker}   # Take ownership (hooks check this name)
 - bl update <id> --status doing  # Move to doing when starting
 - bl update <id> --status review # Move to review when done
 </board_tools>
 
 <execution_protocol>
-1. Take ownership: `bl claim <id> --agent worker` then `bl update <id> --status doing`.
+1. Take ownership: `bl claim <id> --agent ${CLAUDE_AGENT_NAME:-worker}` then `bl update <id> --status doing`.
    You own the full card lifecycle. TeammateIdle and TaskCompleted hooks check
-   that cards are assigned to "worker" — this claim makes that work.
+   that cards are assigned to your agent name — this claim makes that work.
+   The orchestrator passes the card ID as the agent name via the Task tool's name: parameter.
 2. Verify worktree branch: `git branch --show-current` — must NOT be main or master.
    If you are on main, STOP immediately and report back to the orchestrator:
    "Worktree isolation failed — on main instead of a worktree branch."
