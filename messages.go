@@ -46,3 +46,13 @@ type closeMsg struct {
 	source     columnIndex
 	resolution beadslite.Resolution
 }
+
+// depLinkMsg carries a dependency link request from the dep-link picker to the board.
+// focusedID is the card that was focused when the picker was opened.
+// pickedID is the card the user selected from the list.
+// mode determines which direction the dependency runs.
+type depLinkMsg struct {
+	focusedID string
+	pickedID  string
+	mode      depLinkMode
+}

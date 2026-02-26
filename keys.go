@@ -19,6 +19,8 @@ type keyMap struct {
 	Search     key.Binding
 	FilterNext key.Binding
 	FilterPrev key.Binding
+	BlockedBy  key.Binding // open dep-link picker: focused card is blocked by selection
+	Blocks     key.Binding // open dep-link picker: focused card blocks selection
 	Help       key.Binding
 	Quit       key.Binding
 	Suspend    key.Binding
@@ -91,6 +93,14 @@ var keys = keyMap{
 		key.WithKeys("F"),
 		key.WithHelp("F", "filter ←"),
 	),
+	BlockedBy: key.NewBinding(
+		key.WithKeys("b"),
+		key.WithHelp("b", "blocked by"),
+	),
+	Blocks: key.NewBinding(
+		key.WithKeys("B"),
+		key.WithHelp("B", "blocks"),
+	),
 	Help: key.NewBinding(
 		key.WithKeys("?"),
 		key.WithHelp("?", "more"),
@@ -120,6 +130,6 @@ func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Left, k.Right},
 		{k.New, k.Edit, k.Delete, k.MoveRight, k.MoveLeft, k.Undo, k.Detail, k.PriorityUp, k.PriorityDn},
-		{k.Search, k.FilterNext, k.FilterPrev, k.Help, k.Quit, k.Suspend, k.Back, k.CtrlClick},
+		{k.Search, k.FilterNext, k.FilterPrev, k.BlockedBy, k.Blocks, k.Help, k.Quit, k.Suspend, k.Back, k.CtrlClick},
 	}
 }

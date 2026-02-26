@@ -92,6 +92,17 @@ func persistUpdate(store *beadslite.Store, issue *beadslite.Issue) tea.Cmd {
 	}
 }
 
+// persistAddDep adds a blocks-type dependency link between two issues.
+// issueID depends on dependsOnID (i.e. dependsOnID blocks issueID).
+func persistAddDep(store *beadslite.Store, issueID, dependsOnID string) tea.Cmd {
+	return func() tea.Msg {
+		if err := store.AddDependency(issueID, dependsOnID, beadslite.DepBlocks); err != nil {
+			return errMsg{err}
+		}
+		return nil
+	}
+}
+
 // persistClose closes an issue in the database with the given resolution.
 // This calls CloseIssue which sets status=done, clears assigned_to, and sets closed_at.
 func persistClose(store *beadslite.Store, id string, resolution beadslite.Resolution) tea.Cmd {

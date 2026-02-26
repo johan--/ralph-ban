@@ -24,6 +24,7 @@ const (
 	viewDetail                      // card detail overlay
 	viewSearch                      // cross-column search mode
 	viewResolution                  // resolution picker before closing a card
+	viewDepLink                     // dep-link picker: link focused card to a blocker
 )
 
 // board is the root tea.Model for the kanban TUI.
@@ -36,11 +37,12 @@ type board struct {
 	quitting bool
 	err      error
 
-	// Overlay state: view controls routing; form/detail/resolution hold overlay data.
+	// Overlay state: view controls routing; form/detail/resolution/depLinker hold overlay data.
 	view       boardView
 	form       *form
 	detail     *detail
 	resolution *resolutionPicker
+	depLinker  *depLinker
 
 	// Single-level undo for accidental moves.
 	lastMove *moveMsg
@@ -164,6 +166,8 @@ func (b *board) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return b.updateSearch(msg)
 	case viewResolution:
 		return b.updateResolution(msg)
+	case viewDepLink:
+		return b.updateDepLink(msg)
 	}
 
 	switch msg := msg.(type) {
@@ -247,6 +251,14 @@ func (b *board) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			b.openSearch()
 			return b, textinputBlink()
 
+		case key.Matches(msg, keys.BlockedBy):
+			b.openDepLinker(depModeBlockedBy)
+			return b, nil
+
+		case key.Matches(msg, keys.Blocks):
+			b.openDepLinker(depModeBlocks)
+			return b, nil
+
 		case key.Matches(msg, keys.FilterNext):
 			b.cycleFilter(+1)
 			return b, nil
@@ -284,6 +296,10 @@ func (b *board) View() string {
 	case viewResolution:
 		if b.resolution != nil {
 			return b.resolution.View()
+		}
+	case viewDepLink:
+		if b.depLinker != nil {
+			return b.depLinker.View()
 		}
 	}
 
@@ -597,6 +613,66 @@ func (b *board) handleClose(msg closeMsg) tea.Cmd {
 	b.resizeColumns()
 
 	return persistClose(b.store, result.cardID, msg.resolution)
+}
+
+// openDepLinker opens the dep-link picker for the focused card.
+// Does nothing if no card is selected.
+func (b *board) openDepLinker(mode depLinkMode) {
+	cd, ok := b.cols[b.focused].SelectedCard()
+	if !ok {
+		return
+	}
+	dl := newDepLinker(b.allIssues, cd.issue.ID, mode)
+	dl.width = b.termWidth
+	dl.height = b.termHeight
+	b.depLinker = &dl
+	b.view = viewDepLink
+}
+
+// updateDepLink routes messages to the dep-link picker overlay.
+// Esc cancels. Enter (emitted as depLinkMsg) creates the dependency link.
+func (b *board) updateDepLink(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		if key.Matches(msg, keys.Back) {
+			b.view = viewBoard
+			b.depLinker = nil
+			return b, nil
+		}
+	case depLinkMsg:
+		b.view = viewBoard
+		b.depLinker = nil
+		return b, b.handleDepLink(msg)
+	}
+
+	if b.depLinker != nil {
+		dl, cmd := b.depLinker.Update(msg)
+		b.depLinker = &dl
+		return b, cmd
+	}
+	return b, nil
+}
+
+// handleDepLink persists the dependency link and triggers a refresh so the
+// board immediately reflects the new blocker state (locked indicators etc.).
+func (b *board) handleDepLink(msg depLinkMsg) tea.Cmd {
+	var issueID, dependsOnID string
+	switch msg.mode {
+	case depModeBlockedBy:
+		// focused card is blocked by the picked card
+		issueID = msg.focusedID
+		dependsOnID = msg.pickedID
+	case depModeBlocks:
+		// focused card blocks the picked card
+		issueID = msg.pickedID
+		dependsOnID = msg.focusedID
+	}
+
+	store := b.store
+	return tea.Sequence(
+		persistAddDep(store, issueID, dependsOnID),
+		b.loadFromStore(),
+	)
 }
 
 // updateResolution routes messages to the resolution picker overlay.
