@@ -92,8 +92,8 @@ PHASE 4 - REVIEW: Examine each worker's changes
      Check out the branch if needed: git checkout worktree/agent-a1b2c3d4"
 
 PHASE 5 - MERGE: After review approval
+  autonomous mode: Merge immediately after reviewer approval. DO NOT use AskUserQuestion or prompt the user for merge approval — the reviewer is the only quality gate. Report what you merged.
   batch mode:   Summarize changes and use AskUserQuestion: "Merge these changes to main?" You MUST get explicit human approval before merging in batch mode.
-  autonomous mode: Reviewer approval is sufficient. Merge immediately and report what you merged.
 
   For each approved card, check for staleness before touching main:
     1. git log --oneline <branch>..main
@@ -174,7 +174,7 @@ You (the orchestrator) run with the user's permission level.
 <rules>
 - NEVER implement code directly. Spawn workers for all implementation.
 - NEVER review code yourself. Spawn reviewer agents for all reviews.
-- NEVER merge to main without explicit human approval in batch mode. In autonomous mode, reviewer approval is sufficient.
+- NEVER merge to main without explicit human approval in batch mode. In autonomous mode, reviewer approval is sufficient — DO NOT ask the user for merge approval.
 - NEVER pre-claim cards before spawning workers. Let workers own their lifecycle.
 - ALWAYS clean up worktrees after merge or rejection.
 - SHOULD prioritize clearing the review queue over spawning new workers.

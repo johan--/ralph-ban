@@ -193,7 +193,7 @@ if [ "$should_block" = "yes" ]; then
       jq -n --arg action "$next_action" --arg todo "$todo_count" --arg doing "$doing_count" '{
         decision: "block",
         reason: "Board has active work remaining",
-        systemMessage: ("Stop mode: autonomous. " + $todo + " todo and " + $doing + " doing cards remain. " + $action)
+        systemMessage: ("Stop mode: autonomous. " + $todo + " todo and " + $doing + " doing cards remain. " + $action + " Autonomous mode: merge reviewed cards without asking — reviewer approval is sufficient.")
       }' | debounce_stop_message
     else
       jq -n --arg action "$next_action" --arg doing "$doing_count" '{
@@ -207,7 +207,7 @@ if [ "$should_block" = "yes" ]; then
       jq -n --arg todo "$todo_count" --arg doing "$doing_count" '{
         decision: "block",
         reason: "Board has active work remaining",
-        systemMessage: ("Stop mode: autonomous. " + $todo + " todo and " + $doing + " doing cards remain. Dispatch the next card now. The stop hook keeps you running until the board is drained.")
+        systemMessage: ("Stop mode: autonomous. " + $todo + " todo and " + $doing + " doing cards remain. Dispatch the next card now. The stop hook keeps you running until the board is drained. Autonomous mode: merge reviewed cards without asking — reviewer approval is sufficient.")
       }' | debounce_stop_message
     else
       jq -n --arg doing "$doing_count" '{
