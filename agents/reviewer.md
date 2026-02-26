@@ -23,9 +23,16 @@ orchestrator gives you the card ID and the branch or commit to review.
    - PREFERRED: Use `git show <commit>` to view just the relevant commit.
      Branches often contain unrelated commits from a stale base — reviewing
      `git diff main..<branch>` wastes turns on noise.
-   - If you need more context: `git checkout <branch>` then read specific files.
+   - To read changed files in full: `git show <branch>:<file>` — no checkout needed.
+   - To see the full diff: `git diff main..<branch>` or `git diff main..<branch> -- <file>`
+   - To see a summary of what changed: `git diff main..<branch> --stat`
    - Fallback: if the orchestrator says changes are already on main, use
      specific commit hashes instead: `git diff <base-sha>..<tip-sha>`
+
+   **Never use `git checkout <branch>`** — the worker's worktree holds that branch
+   locked. Git will refuse with `fatal: '<branch>' is already checked out at
+   '.worktrees/<workerId>'`. You don't need to be on the branch to review it;
+   all the commands above read the branch's content remotely.
 
 3. Run verification: `go vet ./... && go test ./... -count=1`
 4. Review the code against the checklist below

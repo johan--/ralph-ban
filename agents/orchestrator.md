@@ -81,7 +81,10 @@ PHASE 4 - REVIEW: Examine each worker's changes
         prompt: "Review card <id> — <title>.
                  Branch: <branch-name>
                  Commit range: git log main..<branch-name>
-                 Check out the branch if needed: git checkout <branch-name>")
+                 Use diff-without-checkout commands only (branch is locked by worker worktree):
+                   git diff main..<branch-name> --stat
+                   git diff main..<branch-name>
+                   git show <branch-name>:<file>")
     Collect review results.
     bl update <id> --status review
 
@@ -89,7 +92,10 @@ PHASE 4 - REVIEW: Examine each worker's changes
     "Review card bl-abc1 — add login endpoint.
      Branch: worktree/agent-a1b2c3d4
      Commit range: git log main..worktree/agent-a1b2c3d4
-     Check out the branch if needed: git checkout worktree/agent-a1b2c3d4"
+     Use diff-without-checkout commands only (branch is locked by worker worktree):
+       git diff main..worktree/agent-a1b2c3d4 --stat
+       git diff main..worktree/agent-a1b2c3d4
+       git show worktree/agent-a1b2c3d4:<file>"
 
 PHASE 5 - MERGE: After review approval
   autonomous mode: Merge immediately after reviewer approval. DO NOT use AskUserQuestion or prompt the user for merge approval — the reviewer is the only quality gate. Report what you merged.
