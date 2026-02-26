@@ -21,9 +21,9 @@ type snapshotCard struct {
 // snapshotColumn is the JSON representation of one kanban column,
 // including the card list and current WIP count.
 type snapshotColumn struct {
-	Title    string         `json:"title"`
-	WIP      int            `json:"wip"`
-	Cards    []snapshotCard `json:"cards"`
+	Title string         `json:"title"`
+	WIP   int            `json:"wip"`
+	Cards []snapshotCard `json:"cards"`
 }
 
 // snapshotOutput is the complete board snapshot. No rendered view is embedded —

@@ -39,10 +39,10 @@ type board struct {
 	err      error
 
 	// Overlay state: view controls routing; form/detail/resolution/depLinker hold overlay data.
-	view       boardView
-	form       *form
-	detail     *detail
-	resolution *resolutionPicker
+	view         boardView
+	form         *form
+	detail       *detail
+	resolution   *resolutionPicker
 	depLinker    *depLinker
 	activityView activity
 

@@ -30,11 +30,11 @@ const heartbeatStaleSeconds = 300
 
 // agentEntry is one row in the activity table.
 type agentEntry struct {
-	name       string
-	cardID     string // empty when idle
-	cardTitle  string
-	status     agentStatus
-	lastSeen   time.Duration // time since last heartbeat; -1 when no file
+	name      string
+	cardID    string // empty when idle
+	cardTitle string
+	status    agentStatus
+	lastSeen  time.Duration // time since last heartbeat; -1 when no file
 }
 
 // activityRefreshMsg carries fresh agent data from a scan of the heartbeats dir.
@@ -45,9 +45,9 @@ type activityRefreshMsg struct {
 // activity is a read-only overlay showing active agent liveness data.
 // It is driven by the same 2-second tick as the board — no separate timer needed.
 type activity struct {
-	entries     []agentEntry
-	width       int
-	height      int
+	entries      []agentEntry
+	width        int
+	height       int
 	heartbeatDir string
 }
 

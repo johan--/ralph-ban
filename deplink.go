@@ -37,7 +37,7 @@ func (p pickerItem) FilterValue() string { return p.id + " " + p.title }
 // It reuses bubbles/list for built-in keyboard navigation and type-to-filter.
 type depLinker struct {
 	list      list.Model
-	focusedID string     // ID of the card that will have the dep attached
+	focusedID string // ID of the card that will have the dep attached
 	mode      depLinkMode
 	width     int
 	height    int

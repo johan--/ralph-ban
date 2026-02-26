@@ -254,9 +254,9 @@ func (c *column) deleteCurrent() tea.Cmd {
 type ageBucket int
 
 const (
-	ageFresh  ageBucket = iota // < 1 day: normal rendering
-	ageAging                   // 1–3 days: amber/yellow tint
-	ageStale                   // 3+ days: orange-red tint
+	ageFresh ageBucket = iota // < 1 day: normal rendering
+	ageAging                  // 1–3 days: amber/yellow tint
+	ageStale                  // 3+ days: orange-red tint
 )
 
 // cardAgeBucket computes the age bucket from a card's UpdatedAt timestamp.
