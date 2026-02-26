@@ -31,9 +31,7 @@ summary=$(echo "$state" | jq -s '
 AGENT_NAME="${CLAUDE_AGENT_NAME:-claude}"
 claimed=$("$BL" list --assigned-to "$AGENT_NAME" --json 2>/dev/null | jq -r 'select(.status != "done") | "\(.id): \(.title) (\(.status))"' 2>/dev/null || true)
 
-parts=("$(framework_preamble)")
-parts+=("")
-parts+=("Board state at compaction:")
+parts=("Board state at compaction:")
 parts+=("$summary")
 if [ -n "$claimed" ]; then
   parts+=("Your claimed cards:")

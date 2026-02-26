@@ -2,30 +2,6 @@
 # Shared functions for reading and diffing board state.
 # Sourced by session-start.sh, board-sync.sh, stop-guard.sh, pre-compact.sh.
 
-# framework_preamble outputs a compact description of the orchestration lifecycle.
-# SessionStart and PreCompact include the full version; other hooks use a one-liner.
-# Main session (no team) gets orchestrator role; teammates get role from agent frontmatter.
-# The merge line adapts to stop_mode: autonomous skips human approval, batch requires it.
-framework_preamble() {
-  if [ -z "${CLAUDE_TEAM_NAME:-}" ]; then
-    local stop_mode
-    stop_mode=$(read_stop_mode)
-    if [ "$stop_mode" = "autonomous" ]; then
-      printf 'You are the orchestrator. Spawn workers for implementation, reviewers for review. Never implement or review code directly. Autonomous mode: reviewer approval is the merge gate — merge without asking the user.\n'
-    else
-      printf 'You are the orchestrator. Spawn workers for implementation, reviewers for review. Never implement or review code directly. Human approval required before any merge.\n'
-    fi
-  fi
-  printf 'Ralph-Ban Orchestration\n'
-  printf '- SessionStart: board snapshot, suggested next task\n'
-  printf '- UserPromptSubmit: board diffs, dispatch/review nudges, stall detection\n'
-  printf '- Stop: blocks exit on uncommitted changes, claimed cards, and active work (batch: blocks on doing only; autonomous: blocks on todo + doing)\n'
-  printf '- TeammateIdle: prevents idle when you own active cards (doing/todo)\n'
-  printf '- TaskCompleted: validates your cards are in review before task completion\n'
-  printf '- PreCompact: re-injects board state before context compression\n'
-  printf 'Hook messages guide your workflow. They are not commands to react to immediately — stay focused on your current task and address blockers as part of your natural flow.\n'
-}
-
 # Anchor to BL_ROOT when set (worktree support), else git root, else cwd.
 _GIT_ROOT="${BL_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 

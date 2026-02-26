@@ -50,22 +50,12 @@ status=$(echo "$first" | jq -r '.status // "unknown"')
 # Count totals
 total=$(echo "$ready" | wc -l | tr -d ' ')
 
-preamble=$(framework_preamble)
 board_summary="Board has ${total} ready items. Highest priority: '${title}' (${id}, ${status})."
 
-# Append rate limit pause notice if active (main session only — teammates don't dispatch).
-if [ -z "${CLAUDE_TEAM_NAME:-}" ]; then
-  pause_info=$(check_rate_limit_pause 2>/dev/null || true)
-  if [ -n "$pause_info" ]; then
-    board_summary="${board_summary} ${pause_info}"
-  fi
+# Append rate limit pause notice if active.
+pause_info=$(check_rate_limit_pause 2>/dev/null || true)
+if [ -n "$pause_info" ]; then
+  board_summary="${board_summary} ${pause_info}"
 fi
 
-if [ -z "${CLAUDE_TEAM_NAME:-}" ]; then
-  # Main session: preamble (includes orchestrator role) + board summary
-  emit_context "${preamble}
-${board_summary}" "$board_summary"
-else
-  # Teammate: board context only (agent frontmatter handles role)
-  emit_context "$board_summary" "$board_summary"
-fi
+emit_context "$board_summary"
