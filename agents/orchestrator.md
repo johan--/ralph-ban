@@ -65,13 +65,14 @@ PHASE 3 - REVIEW: Examine each worker's changes yourself
 
   For each completed worker:
     Extract the branch name from the Task result.
-    Review the diff directly:
+    Review the diff (read-only — do NOT checkout files into main's working tree):
       git diff main..<branch-name> --stat
       git diff main..<branch-name>
       git show <branch-name>:<file>    # read specific files in full
       git log main..<branch-name>      # see commit history
-    Run verification from the worktree branch content:
-      go vet ./... && go test ./... -count=1
+    Run verification IN THE WORKTREE DIRECTORY (not main):
+      cd .claude/worktrees/<agent-dir> && GOWORK=off go vet ./... && GOWORK=off go test ./... -count=1
+      cd $(git rev-parse --show-toplevel)   # always return to main repo root after
     bl update <id> --status review
 
   Review checklist:
@@ -90,6 +91,11 @@ PHASE 3 - REVIEW: Examine each worker's changes yourself
 PHASE 4 - MERGE: After review
   autonomous mode: Merge immediately after your review approves the change. DO NOT use AskUserQuestion or prompt the user for merge approval. Report what you merged.
   batch mode:   Summarize changes and use AskUserQuestion: "Merge these changes to main?" You MUST get explicit human approval before merging in batch mode.
+
+  Before any merge operation, verify you are on main with a clean tree:
+    git branch --show-current   # must say "main"
+    git status --short          # must be empty
+  If either check fails, fix it before proceeding. Never merge from a worktree branch.
 
   For each approved card, run a dry-run conflict check before touching main
   (requires Git 2.38+; macOS ships 2.39+ since Ventura):
