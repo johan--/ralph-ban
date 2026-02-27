@@ -498,3 +498,588 @@ func TestResumeMsgTriggersRefresh(t *testing.T) {
 		t.Error("refreshMsg should contain the issue created while suspended")
 	}
 }
+
+// --- handleMove ---
+
+func TestHandleMove_CardMovesToTarget(t *testing.T) {
+	b := newTestBoard(t)
+
+	issue := makeIssue("bl-mv", "Move Me", beadslite.StatusTodo)
+	b.cols[colTodo].SetItems([]list.Item{card{issue: issue}})
+
+	cmd := b.handleMove(moveMsg{
+		card:   card{issue: issue},
+		source: colTodo,
+		target: colDoing,
+	})
+
+	if cmd == nil {
+		t.Fatal("handleMove should return a persist command")
+	}
+
+	// Source column should be empty.
+	todoItems := b.cols[colTodo].list.Items()
+	if len(todoItems) != 0 {
+		t.Errorf("todo has %d items after move, want 0", len(todoItems))
+	}
+
+	// Target column should have the card.
+	doingItems := b.cols[colDoing].list.Items()
+	if len(doingItems) != 1 {
+		t.Fatalf("doing has %d items after move, want 1", len(doingItems))
+	}
+	movedCard := doingItems[0].(card)
+	if movedCard.issue.ID != "bl-mv" {
+		t.Errorf("moved card ID = %q, want bl-mv", movedCard.issue.ID)
+	}
+}
+
+func TestHandleMove_FocusFollowsCard(t *testing.T) {
+	b := newTestBoard(t)
+
+	issue := makeIssue("bl-focus", "Focus Follows", beadslite.StatusTodo)
+	b.cols[colTodo].SetItems([]list.Item{card{issue: issue}})
+	b.focused = colTodo
+	b.cols[colTodo].Focus()
+
+	b.handleMove(moveMsg{
+		card:   card{issue: issue},
+		source: colTodo,
+		target: colDoing,
+	})
+
+	if b.focused != colDoing {
+		t.Errorf("focused = %d after move, want %d (colDoing)", b.focused, colDoing)
+	}
+	if !b.cols[colDoing].Focused() {
+		t.Error("colDoing should be focused after move")
+	}
+	if b.cols[colTodo].Focused() {
+		t.Error("colTodo should be blurred after move")
+	}
+}
+
+func TestHandleMove_UndoEntryPushed(t *testing.T) {
+	b := newTestBoard(t)
+
+	issue := makeIssue("bl-undo-move", "Undo Move", beadslite.StatusTodo)
+	b.cols[colTodo].SetItems([]list.Item{card{issue: issue}})
+
+	if len(b.undo) != 0 {
+		t.Fatalf("undo stack should be empty before move, got %d", len(b.undo))
+	}
+
+	b.handleMove(moveMsg{
+		card:   card{issue: issue},
+		source: colTodo,
+		target: colDoing,
+	})
+
+	if len(b.undo) != 1 {
+		t.Fatalf("undo stack len = %d after move, want 1", len(b.undo))
+	}
+	entry := b.undo[0]
+	if entry.kind != undoMove {
+		t.Errorf("undo entry kind = %d, want undoMove (%d)", entry.kind, undoMove)
+	}
+	if entry.move.source != colTodo {
+		t.Errorf("undo entry source = %d, want colTodo (%d)", entry.move.source, colTodo)
+	}
+	if entry.move.target != colDoing {
+		t.Errorf("undo entry target = %d, want colDoing (%d)", entry.move.target, colDoing)
+	}
+}
+
+func TestHandleMove_IntoDoneOpensResolutionPicker(t *testing.T) {
+	b := newTestBoard(t)
+
+	issue := makeIssue("bl-done", "Close Me", beadslite.StatusReview)
+	b.cols[colReview].SetItems([]list.Item{card{issue: issue}})
+
+	cmd := b.handleMove(moveMsg{
+		card:   card{issue: issue},
+		source: colReview,
+		target: colDone,
+	})
+
+	// handleMove returns nil when intercepted by the resolution picker.
+	if cmd != nil {
+		t.Error("handleMove into Done should return nil (intercepted by resolution picker)")
+	}
+
+	// Resolution picker should be open.
+	if b.view != viewResolution {
+		t.Errorf("view = %d after move to Done, want viewResolution (%d)", b.view, viewResolution)
+	}
+	if b.resolution == nil {
+		t.Error("resolution picker should be set after move to Done")
+	}
+
+	// Card should NOT have moved yet — picker hasn't confirmed.
+	doneItems := b.cols[colDone].list.Items()
+	if len(doneItems) != 0 {
+		t.Errorf("done has %d items before resolution confirm, want 0", len(doneItems))
+	}
+}
+
+func TestHandleMove_WIPLimitBlocked(t *testing.T) {
+	b := newTestBoard(t)
+	// Set via b.wip — handleMove reads from b.wip.wipLimit(), not b.cols[i].wipLimit.
+	b.wip = boardConfig{WIPLimits: map[string]int{"doing": 1}}
+
+	// Pre-fill doing to capacity.
+	existing := makeIssue("bl-existing", "Existing", beadslite.StatusDoing)
+	b.cols[colDoing].SetItems([]list.Item{card{issue: existing}})
+
+	incoming := makeIssue("bl-incoming", "Incoming", beadslite.StatusTodo)
+	b.cols[colTodo].SetItems([]list.Item{card{issue: incoming}})
+
+	cmd := b.handleMove(moveMsg{
+		card:   card{issue: incoming},
+		source: colTodo,
+		target: colDoing,
+	})
+
+	// Should be blocked — no command returned.
+	if cmd != nil {
+		t.Error("handleMove should return nil when WIP limit is reached")
+	}
+
+	// Error should be set on the board.
+	if b.err == nil {
+		t.Error("board error should be set when WIP limit blocks a move")
+	}
+
+	// Card should remain in todo.
+	todoItems := b.cols[colTodo].list.Items()
+	if len(todoItems) != 1 {
+		t.Errorf("todo has %d items (card should not have moved), want 1", len(todoItems))
+	}
+
+	// Doing should still be at capacity (1), not 2.
+	doingItems := b.cols[colDoing].list.Items()
+	if len(doingItems) != 1 {
+		t.Errorf("doing has %d items after blocked move, want 1", len(doingItems))
+	}
+}
+
+func TestHandleMove_ClearsErrorOnSuccess(t *testing.T) {
+	b := newTestBoard(t)
+
+	// Set a pre-existing error to verify it gets cleared.
+	b.err = fmt.Errorf("prior error")
+
+	issue := makeIssue("bl-clear", "Clear Error", beadslite.StatusTodo)
+	b.cols[colTodo].SetItems([]list.Item{card{issue: issue}})
+
+	b.handleMove(moveMsg{
+		card:   card{issue: issue},
+		source: colTodo,
+		target: colDoing,
+	})
+
+	if b.err != nil {
+		t.Errorf("board error should be cleared after successful move, got: %v", b.err)
+	}
+}
+
+// --- handleSave ---
+
+func TestHandleSave_NilIssueReturnsNil(t *testing.T) {
+	b := newTestBoard(t)
+
+	cmd := b.handleSave(saveMsg{issue: nil})
+
+	if cmd != nil {
+		t.Error("handleSave with nil issue should return nil")
+	}
+	// View should be reset to board.
+	if b.view != viewBoard {
+		t.Errorf("view = %d after nil save, want viewBoard (%d)", b.view, viewBoard)
+	}
+}
+
+func TestHandleSave_EditExistingCard(t *testing.T) {
+	b := newTestBoard(t)
+
+	originalIssue := makeIssue("bl-edit", "Original Title", beadslite.StatusTodo)
+	b.cols[colTodo].SetItems([]list.Item{card{issue: originalIssue}})
+
+	// Submit an edit with a new title.
+	updatedIssue := makeIssue("bl-edit", "Updated Title", beadslite.StatusTodo)
+	cmd := b.handleSave(saveMsg{issue: updatedIssue})
+
+	if cmd == nil {
+		t.Fatal("handleSave for edit should return a persist command")
+	}
+
+	// Card should be updated in the column.
+	items := b.cols[colTodo].list.Items()
+	if len(items) != 1 {
+		t.Fatalf("todo has %d items after edit, want 1", len(items))
+	}
+	editedCard := items[0].(card)
+	if editedCard.issue.Title != "Updated Title" {
+		t.Errorf("card title = %q after edit, want %q", editedCard.issue.Title, "Updated Title")
+	}
+}
+
+func TestHandleSave_EditPushesUndoEntry(t *testing.T) {
+	b := newTestBoard(t)
+
+	originalIssue := makeIssue("bl-edit-undo", "Before", beadslite.StatusTodo)
+	b.cols[colTodo].SetItems([]list.Item{card{issue: originalIssue}})
+
+	updatedIssue := makeIssue("bl-edit-undo", "After", beadslite.StatusTodo)
+	b.handleSave(saveMsg{issue: updatedIssue})
+
+	if len(b.undo) != 1 {
+		t.Fatalf("undo stack len = %d after edit, want 1", len(b.undo))
+	}
+	entry := b.undo[0]
+	if entry.kind != undoEdit {
+		t.Errorf("undo entry kind = %d, want undoEdit (%d)", entry.kind, undoEdit)
+	}
+	if entry.issue == nil {
+		t.Fatal("undo entry issue should not be nil for edit")
+	}
+	// Snapshot should hold the old title.
+	if entry.issue.Title != "Before" {
+		t.Errorf("undo snapshot title = %q, want %q", entry.issue.Title, "Before")
+	}
+}
+
+func TestHandleSave_CreateNewCard(t *testing.T) {
+	b := newTestBoard(t)
+
+	newIssue := makeIssue("bl-new", "Brand New", beadslite.StatusTodo)
+	cmd := b.handleSave(saveMsg{issue: newIssue})
+
+	if cmd == nil {
+		t.Fatal("handleSave for create should return a persist command")
+	}
+
+	// Card should appear in the appropriate column.
+	items := b.cols[colTodo].list.Items()
+	if len(items) != 1 {
+		t.Fatalf("todo has %d items after create, want 1", len(items))
+	}
+	createdCard := items[0].(card)
+	if createdCard.issue.ID != "bl-new" {
+		t.Errorf("created card ID = %q, want bl-new", createdCard.issue.ID)
+	}
+}
+
+func TestHandleSave_CreateDoesNotPushUndo(t *testing.T) {
+	b := newTestBoard(t)
+
+	newIssue := makeIssue("bl-no-undo", "New Card", beadslite.StatusBacklog)
+	b.handleSave(saveMsg{issue: newIssue})
+
+	// Creating a new card doesn't record an undo entry — there's nothing to undo back to.
+	if len(b.undo) != 0 {
+		t.Errorf("undo stack len = %d after create, want 0", len(b.undo))
+	}
+}
+
+func TestHandleSave_CreateAddsToCorrectColumn(t *testing.T) {
+	b := newTestBoard(t)
+
+	// A card with StatusDoing should land in the Doing column.
+	doingIssue := makeIssue("bl-doing", "In Progress", beadslite.StatusDoing)
+	b.handleSave(saveMsg{issue: doingIssue})
+
+	if len(b.cols[colDoing].list.Items()) != 1 {
+		t.Errorf("doing has %d items, want 1", len(b.cols[colDoing].list.Items()))
+	}
+	// Other columns should be empty.
+	for i := columnIndex(0); i < numColumns; i++ {
+		if i == colDoing {
+			continue
+		}
+		if len(b.cols[i].list.Items()) != 0 {
+			t.Errorf("column %d has %d items, want 0", i, len(b.cols[i].list.Items()))
+		}
+	}
+}
+
+func TestHandleSave_ResetsViewToBoard(t *testing.T) {
+	b := newTestBoard(t)
+	b.view = viewForm
+
+	// Even with a nil issue the view should be reset.
+	b.handleSave(saveMsg{issue: nil})
+
+	if b.view != viewBoard {
+		t.Errorf("view = %d after save, want viewBoard (%d)", b.view, viewBoard)
+	}
+}
+
+// --- handleClose ---
+
+func TestHandleClose_CardMovesToDoneColumn(t *testing.T) {
+	b := newTestBoard(t)
+
+	issue := makeIssue("bl-close", "Close Card", beadslite.StatusReview)
+	b.cols[colReview].SetItems([]list.Item{card{issue: issue}})
+
+	cmd := b.handleClose(closeMsg{
+		card:       card{issue: issue},
+		source:     colReview,
+		resolution: beadslite.ResolutionDone,
+	})
+
+	if cmd == nil {
+		t.Fatal("handleClose should return a persist command")
+	}
+
+	// Card should be in Done.
+	doneItems := b.cols[colDone].list.Items()
+	if len(doneItems) != 1 {
+		t.Fatalf("done has %d items after close, want 1", len(doneItems))
+	}
+	closedCard := doneItems[0].(card)
+	if closedCard.issue.ID != "bl-close" {
+		t.Errorf("closed card ID = %q, want bl-close", closedCard.issue.ID)
+	}
+
+	// Card should be removed from Review.
+	reviewItems := b.cols[colReview].list.Items()
+	if len(reviewItems) != 0 {
+		t.Errorf("review has %d items after close, want 0", len(reviewItems))
+	}
+}
+
+func TestHandleClose_UndoEntryPushed(t *testing.T) {
+	b := newTestBoard(t)
+
+	issue := makeIssue("bl-close-undo", "Close Undo", beadslite.StatusReview)
+	b.cols[colReview].SetItems([]list.Item{card{issue: issue}})
+
+	b.handleClose(closeMsg{
+		card:       card{issue: issue},
+		source:     colReview,
+		resolution: beadslite.ResolutionDone,
+	})
+
+	if len(b.undo) != 1 {
+		t.Fatalf("undo stack len = %d after close, want 1", len(b.undo))
+	}
+	entry := b.undo[0]
+	if entry.kind != undoMove {
+		t.Errorf("undo entry kind = %d, want undoMove (%d)", entry.kind, undoMove)
+	}
+	if entry.move.target != colDone {
+		t.Errorf("undo entry target = %d, want colDone (%d)", entry.move.target, colDone)
+	}
+}
+
+func TestHandleClose_WIPLimitOnDoneBlocks(t *testing.T) {
+	b := newTestBoard(t)
+	// Set via b.wip — handleClose reads from b.wip.wipLimit(), not b.cols[i].wipLimit.
+	b.wip = boardConfig{WIPLimits: map[string]int{"done": 1}}
+
+	// Fill Done to capacity.
+	existing := makeIssue("bl-done-existing", "Already Done", beadslite.StatusDone)
+	b.cols[colDone].SetItems([]list.Item{card{issue: existing}})
+
+	incoming := makeIssue("bl-close-wip", "Close WIP", beadslite.StatusReview)
+	b.cols[colReview].SetItems([]list.Item{card{issue: incoming}})
+
+	cmd := b.handleClose(closeMsg{
+		card:       card{issue: incoming},
+		source:     colReview,
+		resolution: beadslite.ResolutionDone,
+	})
+
+	// Move should be blocked.
+	if cmd != nil {
+		t.Error("handleClose should return nil when Done WIP limit is reached")
+	}
+	if b.err == nil {
+		t.Error("board error should be set when Done WIP limit blocks close")
+	}
+
+	// Done should still have 1 (the existing card).
+	if len(b.cols[colDone].list.Items()) != 1 {
+		t.Errorf("done has %d items after blocked close, want 1", len(b.cols[colDone].list.Items()))
+	}
+}
+
+// --- handleDelete ---
+
+func TestHandleDelete_ReturnsCommand(t *testing.T) {
+	b := newTestBoard(t)
+
+	issue := makeIssue("bl-del", "Delete Me", beadslite.StatusTodo)
+	b.cols[colTodo].SetItems([]list.Item{card{issue: issue}})
+
+	cmd := b.handleDelete(deleteMsg{id: "bl-del"})
+
+	if cmd == nil {
+		t.Fatal("handleDelete should return a persist command")
+	}
+}
+
+func TestHandleDelete_PushesUndoEntry(t *testing.T) {
+	b := newTestBoard(t)
+
+	issue := makeIssue("bl-del-undo", "Delete Undo", beadslite.StatusTodo)
+	b.cols[colTodo].SetItems([]list.Item{card{issue: issue}})
+
+	if len(b.undo) != 0 {
+		t.Fatalf("undo stack should be empty before delete, got %d", len(b.undo))
+	}
+
+	b.handleDelete(deleteMsg{id: "bl-del-undo"})
+
+	if len(b.undo) != 1 {
+		t.Fatalf("undo stack len = %d after delete, want 1", len(b.undo))
+	}
+	entry := b.undo[0]
+	if entry.kind != undoDelete {
+		t.Errorf("undo entry kind = %d, want undoDelete (%d)", entry.kind, undoDelete)
+	}
+	if entry.issue == nil {
+		t.Fatal("undo entry issue should not be nil for delete")
+	}
+	if entry.issue.ID != "bl-del-undo" {
+		t.Errorf("undo snapshot ID = %q, want bl-del-undo", entry.issue.ID)
+	}
+}
+
+func TestHandleDelete_SnapshotIsIndependentCopy(t *testing.T) {
+	b := newTestBoard(t)
+
+	issue := makeIssue("bl-del-copy", "Original Title", beadslite.StatusTodo)
+	b.cols[colTodo].SetItems([]list.Item{card{issue: issue}})
+
+	b.handleDelete(deleteMsg{id: "bl-del-copy"})
+
+	// Mutating the original issue pointer should not corrupt the undo snapshot.
+	issue.Title = "Mutated After Delete"
+
+	if b.undo[0].issue.Title != "Original Title" {
+		t.Errorf("undo snapshot title = %q after mutation, want %q (snapshot should be independent)",
+			b.undo[0].issue.Title, "Original Title")
+	}
+}
+
+func TestHandleDelete_CardNotInBoardSkipsUndo(t *testing.T) {
+	b := newTestBoard(t)
+	// All columns are empty — the card being deleted doesn't exist in any column.
+	// handleDelete should still return a command and not panic.
+	cmd := b.handleDelete(deleteMsg{id: "bl-ghost"})
+
+	// A command is returned (persistDelete is called regardless).
+	if cmd == nil {
+		t.Fatal("handleDelete should return a persist command even if card not found in columns")
+	}
+
+	// No undo entry — card wasn't found to snapshot.
+	if len(b.undo) != 0 {
+		t.Errorf("undo stack len = %d when card not found, want 0", len(b.undo))
+	}
+}
+
+// --- applyRefresh ---
+
+func TestApplyRefresh_ColumnItemsReplaced(t *testing.T) {
+	b := newTestBoard(t)
+
+	// Pre-fill some columns with stale items.
+	stale := makeIssue("bl-stale", "Stale", beadslite.StatusTodo)
+	b.cols[colTodo].SetItems([]list.Item{card{issue: stale}})
+
+	// Refresh arrives with fresh data.
+	fresh1 := makeIssue("bl-fresh1", "Fresh One", beadslite.StatusTodo)
+	fresh2 := makeIssue("bl-fresh2", "Fresh Two", beadslite.StatusDoing)
+
+	b.applyRefresh(refreshMsg{
+		issues:     []*beadslite.Issue{fresh1, fresh2},
+		blockedIDs: nil,
+	})
+
+	todoItems := b.cols[colTodo].list.Items()
+	if len(todoItems) != 1 {
+		t.Fatalf("todo has %d items after refresh, want 1", len(todoItems))
+	}
+	if todoItems[0].(card).issue.ID != "bl-fresh1" {
+		t.Errorf("todo[0] ID = %q after refresh, want bl-fresh1", todoItems[0].(card).issue.ID)
+	}
+
+	doingItems := b.cols[colDoing].list.Items()
+	if len(doingItems) != 1 {
+		t.Fatalf("doing has %d items after refresh, want 1", len(doingItems))
+	}
+	if doingItems[0].(card).issue.ID != "bl-fresh2" {
+		t.Errorf("doing[0] ID = %q after refresh, want bl-fresh2", doingItems[0].(card).issue.ID)
+	}
+}
+
+func TestApplyRefresh_BlockedCardsPropagated(t *testing.T) {
+	b := newTestBoard(t)
+
+	issueA := makeIssue("bl-blocked", "Blocked Card", beadslite.StatusTodo)
+	issueB := makeIssue("bl-free", "Free Card", beadslite.StatusTodo)
+
+	b.applyRefresh(refreshMsg{
+		issues:     []*beadslite.Issue{issueA, issueB},
+		blockedIDs: map[string]bool{"bl-blocked": true},
+	})
+
+	items := b.cols[colTodo].list.Items()
+	if len(items) != 2 {
+		t.Fatalf("todo has %d items, want 2", len(items))
+	}
+
+	byID := make(map[string]card)
+	for _, item := range items {
+		c := item.(card)
+		byID[c.issue.ID] = c
+	}
+
+	if !byID["bl-blocked"].blocked {
+		t.Error("bl-blocked should have blocked=true after refresh")
+	}
+	if byID["bl-free"].blocked {
+		t.Error("bl-free should have blocked=false after refresh")
+	}
+}
+
+func TestApplyRefresh_UndoStackCleared(t *testing.T) {
+	b := newTestBoard(t)
+
+	// Seed the undo stack with entries that will be stale after refresh.
+	b.undo.push(undoEntry{kind: undoMove})
+	b.undo.push(undoEntry{kind: undoEdit})
+
+	if len(b.undo) != 2 {
+		t.Fatalf("undo stack len = %d before refresh, want 2", len(b.undo))
+	}
+
+	b.applyRefresh(refreshMsg{issues: nil, blockedIDs: nil})
+
+	if len(b.undo) != 0 {
+		t.Errorf("undo stack len = %d after refresh, want 0", len(b.undo))
+	}
+}
+
+func TestApplyRefresh_EmptyIssuesEmptiesColumns(t *testing.T) {
+	b := newTestBoard(t)
+
+	// Pre-fill columns.
+	for i := columnIndex(0); i < numColumns; i++ {
+		issue := makeIssue(fmt.Sprintf("bl-%d", i), "Card", beadslite.StatusTodo)
+		b.cols[colTodo].SetItems([]list.Item{card{issue: issue}})
+	}
+
+	// Refresh with no issues — all columns should become empty.
+	b.applyRefresh(refreshMsg{issues: nil, blockedIDs: nil})
+
+	for i := columnIndex(0); i < numColumns; i++ {
+		if len(b.cols[i].list.Items()) != 0 {
+			t.Errorf("column %d has %d items after empty refresh, want 0", i, len(b.cols[i].list.Items()))
+		}
+	}
+}
