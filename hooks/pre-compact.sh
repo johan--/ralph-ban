@@ -31,8 +31,11 @@ summary=$(echo "$state" | jq -s '
 AGENT_NAME="${CLAUDE_AGENT_NAME:-claude}"
 claimed=$("$BL" list --assigned-to "$AGENT_NAME" --json 2>/dev/null | jq -r 'select(.status != "done") | "\(.id): \(.title) (\(.status))"' 2>/dev/null || true)
 
+stop_mode=$(read_stop_mode)
+
 parts=("Board state at compaction:")
 parts+=("$summary")
+parts+=("Stop mode: ${stop_mode}")
 if [ -n "$claimed" ]; then
   parts+=("Your claimed cards:")
   parts+=("$claimed")
