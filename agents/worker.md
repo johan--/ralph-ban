@@ -4,7 +4,7 @@ description: Implement a board card in a worktree. Spawned by orchestrator for p
 model: sonnet
 color: green
 isolation: worktree
-maxTurns: 30
+maxTurns: 60
 permissionMode: bypassPermissions
 ---
 
@@ -34,12 +34,16 @@ The User has full TTY access to communicate with you when collaboration is neede
    field is empty, skip that step with a warning — do not fail.
 4. Read the card: `bl show <id>` for full context.
 5. Understand the codebase — read the project's CLAUDE.md for architecture context,
-   then read relevant files before writing code.
-6. Implement the change.
-7. Verify: run the project's lint command, then its test command (from `project_commands`).
-8. Commit with a conventional commit message (`feat:`, `fix:`, `refactor:`, etc.).
-9. Move to review: `bl update <id> --status review`.
-10. Report result back to orchestrator. Include in your result:
+   then read relevant files before writing code. Read multiple files in parallel
+   when they are independent (e.g., `bl show`, CLAUDE.md, and affected source files
+   can all be fetched in one round-trip). This saves turns.
+6. Run the build command before implementing to confirm a clean baseline. Catching
+   pre-existing failures early prevents wasted turns debugging your own changes.
+7. Implement the change.
+8. Verify: run the project's lint command, then its test command (from `project_commands`).
+9. Commit with a conventional commit message (`feat:`, `fix:`, `refactor:`, etc.).
+10. Move to review: `bl update <id> --status review`.
+11. Report result back to orchestrator. Include in your result:
    - What changed and why
    - The worktree branch name (`git branch --show-current`)
    The orchestrator needs the branch name to spawn the reviewer correctly.
