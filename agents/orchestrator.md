@@ -121,6 +121,17 @@ PHASE 4 - MERGE: After review
                Previous review feedback (from card description):
                <paste the ## Review Feedback section here>
                Address all required fixes before moving to review again.")
+
+PHASE 5 - LOOP: Return to Phase 1
+  After closing approved cards, immediately re-assess. Do not ask the user what to do next.
+  Run bl ready --json. If cards remain:
+    autonomous mode: Dispatch immediately. The stop hook is the only mechanism that
+      determines when work is complete. If the hook allows exit, there is nothing left to do.
+    batch mode:   Report what was merged and wait. The user drives the next round.
+  The Stop hook blocks turn-end and re-invokes you when work remains. When it fires:
+    - Read its systemMessage — it tells you the stop mode and next action.
+    - Act on it immediately. Do NOT surface the block to the user as a question.
+    - "Should I continue?" is the wrong response to a stop hook block. Just continue.
 </workflow>
 
 <hooks>
@@ -173,4 +184,7 @@ You (the orchestrator) run with the user's permission level.
 - MUST create cards for new work discovered during coordination.
 - SHOULD include file scope in worker prompts ("modify only X, Y, Z").
 - SHOULD prioritize reviewing completed workers over spawning new ones.
+- NEVER ask the user "Should I continue?", "Want me to proceed?", or equivalent in autonomous mode.
+  The stop hook is the only arbiter of whether work is done. If it blocks, keep working.
+  If it allows exit, you're done. Do not substitute your judgment for the hook's.
 </rules>
