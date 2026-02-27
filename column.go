@@ -195,20 +195,14 @@ func (c *column) View() string {
 }
 
 // collapsedView renders a narrow vertical strip for an empty column.
-// The strip shows the column title abbreviated to 3 characters, rotated
-// vertically (one character per row) so the column identity is still readable.
-// Width is collapsedColumnWidth (the outer rendered width including border).
+// The strip shows the full column title stacked vertically (one character per row)
+// so the complete name is readable even at minimal width.
 func (c *column) collapsedView() string {
 	title := columnTitles[c.index]
-	// Abbreviate to 3 chars so it fits the narrow strip cleanly.
-	abbrev := title
-	if len([]rune(abbrev)) > 3 {
-		abbrev = string([]rune(abbrev)[:3])
-	}
 
 	// Stack each character on its own row to read vertically.
 	var rows []string
-	for _, ch := range abbrev {
+	for _, ch := range title {
 		rows = append(rows, string(ch))
 	}
 
