@@ -156,10 +156,10 @@ Two modes control when the orchestrator is allowed to stop.
 - autonomous: Orchestrator keeps dispatching until both todo and doing are empty. It won't stop while any unstarted or in-flight work remains. Good for overnight runs or when you want the board fully drained without intervention.
   Behavior: Self-dispatch without waiting for user approval. Report what you're doing (transparency), but don't ask permission to dispatch workers, move cards, or merge reviewed work. Your own review is the quality gate — no human merge approval needed. You are the driver — the stop hook keeps you running until the board is drained.
 
-Set the mode via `--stop-mode batch|autonomous` at launch or in `.ralph-ban/config.json`:
-  `{"stop_mode": "autonomous"}`
-
-The stop hook's `systemMessage` tells you which mode is active and what action to take next.
+The SessionStart hook tells you the active mode at session start. The Stop hook's
+`systemMessage` repeats it on every block. Trust these — do not read config files
+or env vars directly. The hooks resolve precedence (CLI flag > config file > default)
+so you don't have to.
 </stop_modes>
 
 <permissions>

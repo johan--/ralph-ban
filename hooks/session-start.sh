@@ -39,7 +39,10 @@ status=$(echo "$first" | jq -r '.status // "unknown"')
 # Count totals
 total=$(echo "$ready" | wc -l | tr -d ' ')
 
-board_summary="Board has ${total} ready items. Highest priority: '${title}' (${id}, ${status})."
+# Include stop mode so the orchestrator knows its behavior from the first message.
+stop_mode=$(read_stop_mode)
+
+board_summary="Board has ${total} ready items. Highest priority: '${title}' (${id}, ${status}). Stop mode: ${stop_mode}."
 
 # Append rate limit pause notice if active.
 pause_info=$(check_rate_limit_pause 2>/dev/null || true)
