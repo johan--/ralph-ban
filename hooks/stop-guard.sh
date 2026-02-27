@@ -7,11 +7,11 @@
 # --- Disable marker: escape hatch before anything else ---
 # Derive git root without sourcing board-state.sh (minimize failure surface).
 _STOP_ROOT="${BL_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
-if [ -f "${_STOP_ROOT}/.ralph-ban/disabled" ]; then
+if [ -f "${_STOP_ROOT}/${RALPH_BAN_DIR:-.ralph-ban}/disabled" ]; then
   exit 0
 fi
 
-STOP_MSG_HASH_FILE="${_STOP_ROOT}/.ralph-ban/.stop-last-msg-hash"
+STOP_MSG_HASH_FILE="${_STOP_ROOT}/${RALPH_BAN_DIR:-.ralph-ban}/.stop-last-msg-hash"
 
 # --- Fail-open: any error silently allows exit ---
 trap 'exit 0' ERR
@@ -90,9 +90,9 @@ require_bl
 
 # --- Stall detection with cycle limit ---
 MAX_STALLS=5
-CYCLE_FILE="${_STOP_ROOT}/.ralph-ban/.stop-cycles"
-HASH_FILE="${_STOP_ROOT}/.ralph-ban/.stop-board-hash"
-mkdir -p "${_STOP_ROOT}/.ralph-ban"
+CYCLE_FILE="${_STOP_ROOT}/${RALPH_BAN_DIR}/.stop-cycles"
+HASH_FILE="${_STOP_ROOT}/${RALPH_BAN_DIR}/.stop-board-hash"
+mkdir -p "${_STOP_ROOT}/${RALPH_BAN_DIR}"
 
 current_hash=$(read_board_hash)
 last_hash=$(cat "$HASH_FILE" 2>/dev/null || echo "")

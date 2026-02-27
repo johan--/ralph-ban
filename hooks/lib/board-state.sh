@@ -5,6 +5,9 @@
 # Anchor to BL_ROOT when set (worktree support), else git root, else cwd.
 _GIT_ROOT="${BL_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 
+# Directory name for ralph-ban config. Override with RALPH_BAN_DIR env var.
+RALPH_BAN_DIR="${RALPH_BAN_DIR:-.ralph-ban}"
+
 # db_exists checks whether the beads-lite database is reachable.
 # Uses BL_ROOT if set (worktree support), else checks cwd.
 db_exists() {
@@ -22,8 +25,8 @@ require_bl() {
   fi
 }
 
-SNAPSHOT_FILE="${_GIT_ROOT}/.ralph-ban/.last-seen.json"
-BOUNCE_FILE="${_GIT_ROOT}/.ralph-ban/.bounce-counts.json"
+SNAPSHOT_FILE="${_GIT_ROOT}/${RALPH_BAN_DIR}/.last-seen.json"
+BOUNCE_FILE="${_GIT_ROOT}/${RALPH_BAN_DIR}/.bounce-counts.json"
 BL="${BL:-bl}"
 REVIEW_QUEUE_THRESHOLD="${REVIEW_QUEUE_THRESHOLD:-3}"
 
@@ -189,7 +192,7 @@ clear_bounce() {
 #   HALF_OPEN + done  (success)          → CLOSED (reset count)
 #   CLOSED  + done                       → CLOSED (clear entry)
 
-CB_FILE="${_GIT_ROOT}/.ralph-ban/.circuit-breaker.json"
+CB_FILE="${_GIT_ROOT}/${RALPH_BAN_DIR}/.circuit-breaker.json"
 BOUNCE_THRESHOLD="${BOUNCE_THRESHOLD:-3}"
 CB_COOLDOWN_SECONDS="${CB_COOLDOWN_SECONDS:-300}" # 5 minutes default
 
@@ -343,7 +346,7 @@ cb_record_success() {
 # --- Stall detection for in-progress cards ---
 
 STALL_THRESHOLD="${STALL_THRESHOLD:-5}"
-PROGRESS_FILE="${_GIT_ROOT}/.ralph-ban/.worker-progress.json"
+PROGRESS_FILE="${_GIT_ROOT}/${RALPH_BAN_DIR}/.worker-progress.json"
 
 # record_card_progress updates stale cycle counts for doing cards.
 # Call once per board-sync. Cards that leave doing are dropped.
@@ -419,7 +422,7 @@ read_stop_mode() {
     return
   fi
   # Config file — user-owned persistent default.
-  local config_file="${_GIT_ROOT}/.ralph-ban/config.json"
+  local config_file="${_GIT_ROOT}/${RALPH_BAN_DIR}/config.json"
   if [ -f "$config_file" ]; then
     jq -r '.stop_mode // "batch"' "$config_file" 2>/dev/null || echo "batch"
   else
@@ -435,7 +438,7 @@ read_stop_mode() {
 # The pause auto-clears after RATE_LIMIT_PAUSE_SECONDS (default 30 minutes).
 # Removing the file manually also clears it.
 
-RATE_LIMIT_PAUSE_FILE="${_GIT_ROOT}/.ralph-ban/.rate-limit-pause"
+RATE_LIMIT_PAUSE_FILE="${_GIT_ROOT}/${RALPH_BAN_DIR}/.rate-limit-pause"
 RATE_LIMIT_PAUSE_SECONDS="${RATE_LIMIT_PAUSE_SECONDS:-1800}" # 30 minutes default
 
 # write_rate_limit_pause records the current timestamp as the pause start.

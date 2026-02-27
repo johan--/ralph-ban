@@ -75,7 +75,7 @@ type board struct {
 func newBoard(store *beadslite.Store) *board {
 	// Load WIP config before constructing columns so limits are available
 	// during the first render. Missing or malformed config is silently ignored.
-	wip := loadConfig(".ralph-ban")
+	wip := loadConfig(ralphBanDir)
 
 	var cols [numColumns]column
 	for i := columnIndex(0); i < numColumns; i++ {

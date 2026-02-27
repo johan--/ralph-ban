@@ -130,17 +130,17 @@ fi
 # Also check for any cards currently in HALF_OPEN state (cool-down expired).
 # Emit a nudge so the orchestrator knows a probe attempt is allowed.
 half_open_nudge=""
-if [ -f "${_GIT_ROOT}/.ralph-ban/.circuit-breaker.json" ]; then
+if [ -f "${_GIT_ROOT}/${RALPH_BAN_DIR}/.circuit-breaker.json" ]; then
   while IFS= read -r card_id; do
     [ -z "$card_id" ] && continue
     current_state=$(cb_get_state "$card_id")
     if [ "$current_state" = "HALF_OPEN" ]; then
       count=$(jq -r --arg id "$card_id" '.[$id].bounce_count // 0' \
-        <"${_GIT_ROOT}/.ralph-ban/.circuit-breaker.json" 2>/dev/null || echo "?")
+        <"${_GIT_ROOT}/${RALPH_BAN_DIR}/.circuit-breaker.json" 2>/dev/null || echo "?")
       half_open_nudge="${half_open_nudge}CIRCUIT BREAKER HALF-OPEN: Card ${card_id} had ${count} bounces but cool-down has expired. One probe attempt allowed — monitor closely. Success resets the breaker; failure reopens it.
 "
     fi
-  done < <(jq -r 'keys[]' <"${_GIT_ROOT}/.ralph-ban/.circuit-breaker.json" 2>/dev/null || true)
+  done < <(jq -r 'keys[]' <"${_GIT_ROOT}/${RALPH_BAN_DIR}/.circuit-breaker.json" 2>/dev/null || true)
 fi
 
 # --- Stall detection: track doing card progress ---
