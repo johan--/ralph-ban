@@ -67,6 +67,9 @@ type column struct {
 	// collapsed is true when this column has 0 cards and should render as a
 	// narrow strip. The board sets this during resizeColumns().
 	collapsed bool
+	// sortReversed is true when the Done column is sorted in reverse order
+	// (newest first). Only meaningful for colDone; ignored on other columns.
+	sortReversed bool
 }
 
 func newColumn(idx columnIndex) column {
@@ -183,6 +186,15 @@ func (c *column) View() string {
 		header = fmt.Sprintf("%s (%d)", columnTitles[c.index], count)
 	}
 
+	// Append sort direction icon for the Done column.
+	if c.index == colDone {
+		if c.sortReversed {
+			header += lipgloss.NewStyle().Foreground(lipgloss.Color("170")).Render(" \U000F0CBD")
+		} else {
+			header += lipgloss.NewStyle().Faint(true).Render(" \U000F0CBC")
+		}
+	}
+
 	if c.confirmDelete {
 		c.list.Title = "Delete? d/esc"
 		view := c.getStyle().Render(c.list.View())
@@ -249,6 +261,15 @@ func (c *column) ViewVertical(termWidth int) string {
 		header = fmt.Sprintf("%s (%d/%d)", columnTitles[c.index], count, c.wipLimit)
 	} else {
 		header = fmt.Sprintf("%s (%d)", columnTitles[c.index], count)
+	}
+
+	// Append sort direction icon for the Done column.
+	if c.index == colDone {
+		if c.sortReversed {
+			header += lipgloss.NewStyle().Foreground(lipgloss.Color("170")).Render(" \U000F0CBD")
+		} else {
+			header += lipgloss.NewStyle().Faint(true).Render(" \U000F0CBC")
+		}
 	}
 
 	// Style the header line — focused column gets a highlighted title.

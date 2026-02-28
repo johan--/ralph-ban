@@ -27,6 +27,7 @@ type keyMap struct {
 	Back         key.Binding
 	CtrlClick    key.Binding // display-only: mouse events bypass key bindings
 	LayoutToggle key.Binding // switch between horizontal and vertical board layout
+	SortToggle   key.Binding // reverse the Done column sort order
 }
 
 var keys = keyMap{
@@ -125,16 +126,20 @@ var keys = keyMap{
 		key.WithKeys("tab"),
 		key.WithHelp("tab", "toggle layout"),
 	),
+	SortToggle: key.NewBinding(
+		key.WithKeys("s"),
+		key.WithHelp("s", "sort ↕"),
+	),
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.New, k.Edit, k.MoveRight, k.MoveLeft, k.Search, k.FilterNext, k.LayoutToggle, k.Help}
+	return []key.Binding{k.New, k.Edit, k.MoveRight, k.MoveLeft, k.Search, k.FilterNext, k.LayoutToggle, k.SortToggle, k.Help}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Left, k.Right},
 		{k.New, k.Edit, k.Delete, k.MoveRight, k.MoveLeft, k.Undo, k.Zoom, k.PriorityUp, k.PriorityDown},
-		{k.Search, k.FilterNext, k.FilterPrev, k.BlockedBy, k.Blocks, k.LayoutToggle, k.Help, k.Quit, k.Suspend, k.Back, k.CtrlClick},
+		{k.Search, k.FilterNext, k.FilterPrev, k.BlockedBy, k.Blocks, k.LayoutToggle, k.SortToggle, k.Help, k.Quit, k.Suspend, k.Back, k.CtrlClick},
 	}
 }

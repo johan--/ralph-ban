@@ -71,6 +71,11 @@ type board struct {
 	// wip holds per-column WIP limits loaded from .ralph-ban/config.json.
 	// Zero limit for a column means unlimited.
 	wip boardConfig
+
+	// doneReversed is true when the Done column is sorted newest-first.
+	// Toggled by the SortToggle keybinding while focused on the Done column.
+	// Not persisted — resets each session.
+	doneReversed bool
 }
 
 func newBoard(store *beadslite.Store) *board {
@@ -289,6 +294,14 @@ func (b *board) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			b.resizeColumns()
 			return b, nil
 
+		case key.Matches(msg, keys.SortToggle):
+			if b.focused == colDone {
+				b.doneReversed = !b.doneReversed
+				b.cols[colDone].sortReversed = b.doneReversed
+				b.applyActiveFilter()
+			}
+			return b, nil
+
 		case key.Matches(msg, keys.Back):
 			if b.filter.field != filterNone {
 				b.clearFilter()
@@ -426,6 +439,16 @@ func sortByPriority(items []list.Item) {
 	})
 }
 
+// reverseDoneItems reverses the Done column bucket in place so the user can
+// toggle between oldest-first (default, matches close order) and newest-first.
+// Only the Done bucket is mutated; all other columns are unchanged.
+func reverseDoneItems(buckets *[numColumns][]list.Item) {
+	items := buckets[colDone]
+	for i, j := 0, len(items)-1; i < j; i, j = i+1, j-1 {
+		items[i], items[j] = items[j], items[i]
+	}
+}
+
 // loadFromStore returns a command that loads all issues and sets up column items.
 func (b *board) loadFromStore() tea.Cmd {
 	return func() tea.Msg {
@@ -453,6 +476,14 @@ func (b *board) applyRefresh(msg refreshMsg) {
 	b.allBlockedIDs = msg.blockedIDs
 
 	buckets := partitionByStatus(msg.issues, msg.blockedIDs)
+
+	// Apply Done sort reversal before filtering or display so the user's
+	// chosen order is preserved across poll ticks.
+	if b.doneReversed {
+		reverseDoneItems(&buckets)
+	}
+	b.cols[colDone].sortReversed = b.doneReversed
+
 	for i := columnIndex(0); i < numColumns; i++ {
 		items := buckets[i]
 		if items == nil {
@@ -1367,6 +1398,12 @@ func (b *board) clearFilter() {
 // allBlockedIDs is passed so the "[locked]" indicator is preserved between poll ticks.
 func (b *board) applyActiveFilter() {
 	buckets := partitionByStatus(b.allIssues, b.allBlockedIDs)
+
+	// Honour the Done column sort direction before applying filters.
+	if b.doneReversed {
+		reverseDoneItems(&buckets)
+	}
+
 	for i := columnIndex(0); i < numColumns; i++ {
 		items := buckets[i]
 		if items == nil {
