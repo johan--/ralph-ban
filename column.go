@@ -2,13 +2,14 @@ package main
 
 import (
 	"fmt"
+	"image/color"
 	"io"
 	"time"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	beadslite "github.com/kylesnowschwartz/beads-lite"
 )
@@ -461,7 +462,7 @@ func (d ageAwareDelegate) Render(w io.Writer, m list.Model, index int, item list
 		return
 	}
 
-	var tintColor lipgloss.Color
+	var tintColor color.Color
 	switch bucket {
 	case ageAging:
 		tintColor = agingTitleColor

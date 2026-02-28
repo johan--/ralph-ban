@@ -5,12 +5,12 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/list"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	beadslite "github.com/kylesnowschwartz/beads-lite"
 )
@@ -120,7 +120,7 @@ func (b *board) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		b.termWidth = msg.Width
 		b.termHeight = msg.Height
-		b.help.Width = msg.Width
+		b.help.SetWidth(msg.Width)
 		b.loaded = true
 		if b.form != nil {
 			b.form.width = msg.Width
@@ -202,13 +202,14 @@ func (b *board) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case closeMsg:
 		return b, b.handleClose(msg)
 
-	case tea.MouseMsg:
-		if msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
-			targetCol, ok := b.columnAtX(msg.X)
+	case tea.MouseClickMsg:
+		m := msg.Mouse()
+		if m.Button == tea.MouseLeft {
+			targetCol, ok := b.columnAtX(m.X)
 			if !ok {
 				return b, nil
 			}
-			if msg.Ctrl {
+			if m.Mod&tea.ModCtrl != 0 {
 				// Ctrl+click: move selected card to clicked column.
 				if targetCol == b.focused {
 					return b, nil
@@ -302,7 +303,16 @@ func (b *board) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return b, cmd
 }
 
-func (b *board) View() string {
+// View implements tea.Model and returns a tea.View with alt-screen and mouse
+// motion enabled. The actual string rendering is delegated to viewContent.
+func (b *board) View() tea.View {
+	v := tea.NewView(b.viewContent())
+	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
+	return v
+}
+
+func (b *board) viewContent() string {
 	if b.quitting {
 		return ""
 	}
@@ -1267,7 +1277,7 @@ func (b *board) updateSearch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, keys.Back):
 			b.cancelSearch()
 			return b, nil
-		case msg.Type == tea.KeyEnter:
+		case msg.Key().Code == tea.KeyEnter:
 			b.dismissSearch()
 			return b, nil
 		}
@@ -1416,7 +1426,7 @@ func (b *board) zoomView() string {
 	// Render the normal board view as the background so column headers stay visible.
 	// Temporarily switch view to viewBoard so boardView() renders columns, not zoom.
 	b.view = viewBoard
-	boardBg := b.View()
+	boardBg := b.viewContent()
 	b.view = viewZoom
 
 	i := b.zoom.issue

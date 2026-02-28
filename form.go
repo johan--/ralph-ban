@@ -3,11 +3,11 @@ package main
 import (
 	"fmt"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	beadslite "github.com/kylesnowschwartz/beads-lite"
 )
@@ -67,9 +67,9 @@ func newTextarea() textarea.Model {
 	// The default CursorLine uses Background("0") which renders as a black bar
 	// on light terminals where dark/light detection fails. Clear just the
 	// background; leave all other textarea styles at their defaults.
-	focused, _ := textarea.DefaultStyles()
-	focused.CursorLine = focused.CursorLine.UnsetBackground()
-	ta.FocusedStyle = focused
+	styles := textarea.DefaultStyles(true)
+	styles.Focused.CursorLine = styles.Focused.CursorLine.UnsetBackground()
+	ta.SetStyles(styles)
 
 	return ta
 }
@@ -79,7 +79,7 @@ func newForm(colIdx columnIndex) form {
 	ti.Placeholder = "Card title..."
 	ti.Focus()
 	ti.CharLimit = 120
-	ti.Width = 40
+	ti.SetWidth(40)
 
 	return form{
 		title:       ti,
@@ -96,7 +96,7 @@ func editForm(issue *beadslite.Issue, colIdx columnIndex) form {
 	ti.SetValue(issue.Title)
 	ti.Focus()
 	ti.CharLimit = 120
-	ti.Width = 40
+	ti.SetWidth(40)
 
 	ta := newTextarea()
 	ta.SetValue(issue.Description)
@@ -127,15 +127,15 @@ func (f form) Update(msg tea.Msg) (form, tea.Cmd) {
 		case key.Matches(msg, keys.Back):
 			return f, nil
 
-		case msg.Type == tea.KeyTab:
+		case msg.String() == "tab":
 			f.advanceFocus(1)
 			return f, nil
 
-		case msg.Type == tea.KeyShiftTab:
+		case msg.String() == "shift+tab":
 			f.advanceFocus(-1)
 			return f, nil
 
-		case msg.Type == tea.KeyEnter:
+		case msg.String() == "enter":
 			// In the description textarea, Enter inserts a newline.
 			// From all other fields, Enter submits the form.
 			if f.focus != fieldDescription {

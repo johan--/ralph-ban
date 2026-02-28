@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	beadslite "github.com/kylesnowschwartz/beads-lite"
 )
@@ -102,7 +102,7 @@ func (d depLinker) Update(msg tea.Msg) (depLinker, tea.Cmd) {
 			return d, nil
 		}
 
-		if msg.Type == tea.KeyEnter {
+		if msg.Key().Code == tea.KeyEnter {
 			item := d.list.SelectedItem()
 			if item == nil {
 				return d, nil

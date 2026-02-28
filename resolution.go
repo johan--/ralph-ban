@@ -3,9 +3,9 @@ package main
 import (
 	"fmt"
 
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	beadslite "github.com/kylesnowschwartz/beads-lite"
 )
@@ -53,7 +53,7 @@ func (r resolutionPicker) Update(msg tea.Msg) (resolutionPicker, tea.Cmd) {
 			r.index = (r.index + 1) % len(resolutionOptions)
 			return r, nil
 
-		case msg.Type == tea.KeyEnter:
+		case msg.String() == "enter":
 			chosen := resolutionOptions[r.index].resolution
 			c := r.card
 			src := r.source

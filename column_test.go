@@ -6,17 +6,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/list"
 	beadslite "github.com/kylesnowschwartz/beads-lite"
-	"github.com/muesli/termenv"
 )
 
-// TestMain forces TrueColor output so lipgloss emits ANSI codes in test
-// environments (no TTY). Without this, style differences are invisible
-// because lipgloss strips all color in Ascii profile.
+// TestMain runs all tests. In lipgloss v2, color profiles are per-renderer
+// and auto-detected; there is no global SetColorProfile.
 func TestMain(m *testing.M) {
-	lipgloss.SetColorProfile(termenv.TrueColor)
 	os.Exit(m.Run())
 }
 

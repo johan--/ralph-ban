@@ -42,7 +42,7 @@ func newBoardForExport(s *beadslite.Store, width, height int) (*board, error) {
 	}
 	b.termWidth = width
 	b.termHeight = height
-	b.help.Width = width
+	b.help.SetWidth(width)
 	b.loaded = true
 	b.applyRefresh(rm)
 	b.cols[b.focused].Focus()
@@ -98,7 +98,7 @@ func dumpBoard(store *beadslite.Store, width, height int, w io.Writer) error {
 	}
 
 	out := dumpOutput{
-		View:      b.View(),
+		View:      b.viewContent(),
 		Width:     width,
 		Height:    height,
 		Focus:     int(b.focused),

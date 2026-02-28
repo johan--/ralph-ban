@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	beadslite "github.com/kylesnowschwartz/beads-lite"
 )
@@ -84,7 +84,7 @@ Run 'ralph-ban <command> --help' for all flags.
 	}
 
 	b := newBoard(store)
-	p := tea.NewProgram(b, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	p := tea.NewProgram(b)
 
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
