@@ -155,6 +155,55 @@ func TestSeedStarterCards_PrioritySorting(t *testing.T) {
 	}
 }
 
+// --- installPlugin ---
+
+func TestInstallPlugin_NoClaude(t *testing.T) {
+	// Point PATH at an empty temp dir so exec.LookPath("claude") fails.
+	emptyDir := t.TempDir()
+	t.Setenv("PATH", emptyDir)
+
+	if installPlugin() {
+		t.Error("installPlugin() returned true when claude is not on PATH")
+	}
+}
+
+// --- defaultConfig ---
+
+func TestDefaultConfig_IncludesProjectCommands(t *testing.T) {
+	// Marshal defaultConfig and confirm project_commands key is present with
+	// empty string values — this ensures the config template is visible to users.
+	data, err := json.MarshalIndent(defaultConfig, "", "  ")
+	if err != nil {
+		t.Fatalf("MarshalIndent: %v", err)
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("Unmarshal raw: %v", err)
+	}
+
+	cmdsRaw, ok := raw["project_commands"]
+	if !ok {
+		t.Fatal("defaultConfig JSON missing 'project_commands' key")
+	}
+
+	var cmds map[string]string
+	if err := json.Unmarshal(cmdsRaw, &cmds); err != nil {
+		t.Fatalf("Unmarshal project_commands: %v", err)
+	}
+
+	for _, field := range []string{"build", "test", "lint"} {
+		val, exists := cmds[field]
+		if !exists {
+			t.Errorf("project_commands missing key %q", field)
+			continue
+		}
+		if val != "" {
+			t.Errorf("project_commands[%q] = %q, want empty string", field, val)
+		}
+	}
+}
+
 // --- defaultConfig round-trip ---
 
 func TestDefaultConfig_RoundTrip(t *testing.T) {

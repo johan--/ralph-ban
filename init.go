@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	beadslite "github.com/kylesnowschwartz/beads-lite"
@@ -18,13 +19,15 @@ const (
 
 // defaultConfig is written to .ralph-ban/config.json on init.
 // WIP limits of 0 mean unlimited — these are sensible starting suggestions,
-// not enforced policy. ProjectCommands is left empty so new projects supply
-// their own build/test/lint commands without overriding language-specific defaults.
+// not enforced policy. ProjectCommands is included with empty strings so users
+// see the structure and can fill in their own build/test/lint commands without
+// needing to know the JSON schema.
 var defaultConfig = boardConfig{
 	WIPLimits: map[string]int{
 		"doing":  3,
 		"review": 2,
 	},
+	ProjectCommands: ProjectCommands{},
 }
 
 // runInit bootstraps a new ralph-ban project in the current directory.
@@ -93,7 +96,10 @@ func runInit(args []string) {
 		}
 	}
 
-	// --- Step 4: Report results ---
+	// --- Step 4: Install Claude Code plugin ---
+	pluginInstalled := installPlugin()
+
+	// --- Step 5: Report results ---
 	fmt.Println("Initialized ralph-ban:")
 	fmt.Printf("  %s/          board configuration\n", ralphBanDir)
 	if configCreated {
@@ -110,12 +116,43 @@ func runInit(args []string) {
 			fmt.Printf("  seeded %d starter cards in Backlog\n", seeded)
 		}
 	}
+	if pluginInstalled {
+		fmt.Println("  claude plugin  ralph-ban hooks + agents installed")
+	} else {
+		fmt.Println()
+		fmt.Println("Claude Code plugin (optional):")
+		fmt.Println("  claude plugin marketplace add kylesnowschwartz/ralph-ban")
+		fmt.Println("  claude plugin install ralph-ban@ralph-ban")
+	}
 
 	fmt.Println()
 	fmt.Println("Run 'ralph-ban' to open the board.")
 	if !dbExisted {
 		fmt.Println("Run 'bl create \"task title\"' to add cards from the CLI.")
 	}
+}
+
+// installPlugin attempts to install the ralph-ban Claude Code plugin via the
+// claude CLI. Both commands are idempotent — they succeed silently if the
+// marketplace or plugin is already registered.
+//
+// Returns true if the claude CLI was found and both commands were attempted,
+// false if claude is not on PATH (caller prints manual instructions instead).
+func installPlugin() bool {
+	claudePath, err := exec.LookPath("claude")
+	if err != nil {
+		return false
+	}
+
+	// Add the marketplace (idempotent — silently succeeds if already added).
+	addCmd := exec.Command(claudePath, "plugin", "marketplace", "add", "kylesnowschwartz/ralph-ban")
+	addCmd.CombinedOutput() //nolint:errcheck // ignore error — may already exist
+
+	// Install the plugin (idempotent — silently succeeds if already installed).
+	installCmd := exec.Command(claudePath, "plugin", "install", "ralph-ban@ralph-ban", "--scope", "user")
+	installCmd.CombinedOutput() //nolint:errcheck // ignore error — may already exist
+
+	return true
 }
 
 // writeDefaultConfig serializes defaultConfig to the given path.

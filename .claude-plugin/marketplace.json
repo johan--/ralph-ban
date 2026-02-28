@@ -1,0 +1,24 @@
+{
+  "name": "ralph-ban",
+  "version": "0.1.0",
+  "description": "Kanban board TUI with agent orchestration for Claude Code",
+  "owner": {
+    "name": "Kyle Snow Schwartz",
+    "url": "https://github.com/kylesnowschwartz"
+  },
+  "plugins": [
+    {
+      "name": "ralph-ban",
+      "source": "./",
+      "description": "Go TUI kanban board backed by beads-lite — hooks, agents, and lifecycle management for Claude Code sessions",
+      "version": "0.1.0",
+      "author": {
+        "name": "Kyle Snow Schwartz"
+      },
+      "repository": "https://github.com/kylesnowschwartz/ralph-ban",
+      "license": "MIT",
+      "category": "productivity",
+      "keywords": ["kanban", "tui", "task-management", "agents", "orchestration"]
+    }
+  ]
+}
