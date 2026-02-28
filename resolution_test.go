@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	beadslite "github.com/kylesnowschwartz/beads-lite"
 )
@@ -44,7 +44,7 @@ func TestResolutionPicker_RightCycles(t *testing.T) {
 		if r.index != i {
 			t.Errorf("before right press %d: index = %d, want %d", i, r.index, i)
 		}
-		r, _ = r.Update(tea.KeyMsg{Type: tea.KeyRight})
+		r, _ = r.Update(tea.KeyPressMsg{Code: tea.KeyRight})
 	}
 
 	// After len(resolutionOptions) right presses we should be back at 0.
@@ -58,7 +58,7 @@ func TestResolutionPicker_LeftWrapsFromZero(t *testing.T) {
 	r := newResolutionPicker(cd, colTodo)
 
 	// Press left from index 0 — should jump to the last option.
-	r, _ = r.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	r, _ = r.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
 	want := len(resolutionOptions) - 1
 	if r.index != want {
 		t.Errorf("left from 0: index = %d, want %d (last option)", r.index, want)
@@ -71,13 +71,13 @@ func TestResolutionPicker_LeftCycles(t *testing.T) {
 
 	// Step right to the last option, then press left back to 0.
 	for i := 0; i < len(resolutionOptions)-1; i++ {
-		r, _ = r.Update(tea.KeyMsg{Type: tea.KeyRight})
+		r, _ = r.Update(tea.KeyPressMsg{Code: tea.KeyRight})
 	}
 	if r.index != len(resolutionOptions)-1 {
 		t.Fatalf("setup failed: expected index at last option, got %d", r.index)
 	}
 
-	r, _ = r.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	r, _ = r.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
 	if r.index != len(resolutionOptions)-2 {
 		t.Errorf("left from last: index = %d, want %d", r.index, len(resolutionOptions)-2)
 	}
@@ -88,12 +88,12 @@ func TestResolutionPicker_EnterEmitsCloseMsg(t *testing.T) {
 	r := newResolutionPicker(cd, colReview)
 
 	// Advance to wontfix (index 1).
-	r, _ = r.Update(tea.KeyMsg{Type: tea.KeyRight})
+	r, _ = r.Update(tea.KeyPressMsg{Code: tea.KeyRight})
 	if r.index != 1 {
 		t.Fatalf("expected index 1 after right, got %d", r.index)
 	}
 
-	_, cmd := r.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	_, cmd := r.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if cmd == nil {
 		t.Fatal("enter should return a cmd, got nil")
 	}
@@ -119,7 +119,7 @@ func TestResolutionPicker_EnterWithDoneResolution(t *testing.T) {
 	r := newResolutionPicker(cd, colDoing)
 
 	// Default index is 0 (done) — press enter immediately.
-	_, cmd := r.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	_, cmd := r.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if cmd == nil {
 		t.Fatal("enter should return a cmd, got nil")
 	}
@@ -139,13 +139,13 @@ func TestResolutionPicker_EnterWithDuplicateResolution(t *testing.T) {
 	r := newResolutionPicker(cd, colTodo)
 
 	// Advance to duplicate (index 2).
-	r, _ = r.Update(tea.KeyMsg{Type: tea.KeyRight})
-	r, _ = r.Update(tea.KeyMsg{Type: tea.KeyRight})
+	r, _ = r.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	r, _ = r.Update(tea.KeyPressMsg{Code: tea.KeyRight})
 	if r.index != 2 {
 		t.Fatalf("expected index 2, got %d", r.index)
 	}
 
-	_, cmd := r.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	_, cmd := r.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	msg := cmd()
 	cm := msg.(closeMsg)
 	if cm.resolution != beadslite.ResolutionDuplicate {
@@ -157,7 +157,7 @@ func TestResolutionPicker_EscReturnsNilCmd(t *testing.T) {
 	cd := makeResolutionCard("bl-008", "A card")
 	r := newResolutionPicker(cd, colTodo)
 
-	_, cmd := r.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	_, cmd := r.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	if cmd != nil {
 		t.Errorf("esc should return nil cmd, got non-nil")
 	}
@@ -218,7 +218,7 @@ func TestResolutionPicker_AllOptionsReachable(t *testing.T) {
 	for i := 0; i < len(resolutionOptions); i++ {
 		opt := resolutionOptions[r.index]
 		seen[opt.resolution] = true
-		r, _ = r.Update(tea.KeyMsg{Type: tea.KeyRight})
+		r, _ = r.Update(tea.KeyPressMsg{Code: tea.KeyRight})
 	}
 
 	for _, opt := range resolutionOptions {

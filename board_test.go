@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
 	beadslite "github.com/kylesnowschwartz/beads-lite"
 )
 
@@ -1131,7 +1131,7 @@ func TestZoomEditKey_TransitionsToEditForm(t *testing.T) {
 	}
 
 	// Press e — should transition to edit form.
-	_, cmd := b.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")})
+	_, cmd := b.Update(tea.KeyPressMsg{Code: 'e', Text: "e"})
 
 	if b.view != viewForm {
 		t.Errorf("view = %d after e in zoom, want viewForm (%d)", b.view, viewForm)
@@ -1162,7 +1162,7 @@ func TestZoomOtherKey_Dismisses(t *testing.T) {
 	}
 
 	// Press any key that isn't e — should dismiss.
-	b.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	b.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 
 	if b.view != viewBoard {
 		t.Errorf("view = %d after esc in zoom, want viewBoard (%d)", b.view, viewBoard)

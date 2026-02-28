@@ -4,8 +4,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
 
 	beadslite "github.com/kylesnowschwartz/beads-lite"
 )

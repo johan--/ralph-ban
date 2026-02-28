@@ -68,6 +68,6 @@ func writeSnapshotASCII(store *beadslite.Store, width, height int, w io.Writer) 
 		return err
 	}
 
-	_, err = io.WriteString(w, b.View()+"\n")
+	_, err = io.WriteString(w, b.View().Content+"\n")
 	return err
 }
