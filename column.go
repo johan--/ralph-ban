@@ -111,7 +111,9 @@ func (c *column) Focused() bool { return c.focus }
 func (c *column) SetSize(w, h int) {
 	c.width = w
 	c.height = h
-	c.list.SetSize(w-2, h-2) // account for border padding
+	// lipgloss v2: Width(w) is the total block width including border and padding.
+	// Horizontal: border(1+1) + padding(1+1) = 4. Vertical: border(1+1) = 2.
+	c.list.SetSize(w-4, h-2)
 }
 
 // SetItems replaces all items in the column's list.
