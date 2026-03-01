@@ -5,6 +5,5 @@
   "author": {
     "name": "kylesnowschwartz"
   },
-  "repository": "https://github.com/kylesnowschwartz/ralph-ban",
-  "agents": "./agents/"
+  "repository": "https://github.com/kylesnowschwartz/ralph-ban"
 }
