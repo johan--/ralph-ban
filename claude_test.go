@@ -4,92 +4,142 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
-func TestBuildClaudeArgs(t *testing.T) {
+// TestParseClaudeFlags exercises the full CLI parsing pipeline end-to-end:
+// splitAtDoubleDash -> normalizeOptionalFlag -> flag.Parse -> fs.Visit -> buildClaudeArgs.
+// Tests run in a temp dir without a plugin manifest so --plugin-dir is absent
+// and we can assert exact arg lists. Plugin-dir is tested separately.
+func TestParseClaudeFlags(t *testing.T) {
 	tests := []struct {
-		name         string
-		model        string
-		prompt       string
-		resume       string
-		passthrough  []string
-		wantContains []string
-		wantAbsent   []string
+		name     string
+		args     []string
+		wantArgs []string // exact claude args (order matters)
+		wantName string   // expected agentName
+		wantStop string   // expected stopMode
+		wantErr  bool
 	}{
 		{
-			name: "defaults",
-			wantContains: []string{
-				"--agent", "rb-orchestrator",
-				"State your role and mission",
-			},
-			wantAbsent: []string{
-				"--model",
-				// --plugin-dir presence depends on whether .ralph-ban/plugin/ exists
-				// on disk — tested separately in TestBuildClaudeArgs_PluginDir.
-				"--settings",
-				"--dangerously-skip-permissions",
-				"--resume",
-			},
+			name:     "defaults",
+			args:     nil,
+			wantArgs: []string{"--agent", "rb-orchestrator", "State your role and mission, then assess the board and begin orchestration."},
+			wantName: "claude",
 		},
 		{
-			name:         "model override",
-			model:        "sonnet",
-			wantContains: []string{"--model", "sonnet"},
+			name:     "custom prompt as flag",
+			args:     []string{"--prompt", "do something"},
+			wantArgs: []string{"--agent", "rb-orchestrator", "do something"},
+			wantName: "claude",
 		},
 		{
-			name:         "passthrough flags",
-			passthrough:  []string{"--dangerously-skip-permissions"},
-			wantContains: []string{"--dangerously-skip-permissions"},
+			name:     "custom prompt as positional arg",
+			args:     []string{"assess the board"},
+			wantArgs: []string{"--agent", "rb-orchestrator", "assess the board"},
+			wantName: "claude",
 		},
 		{
-			name:         "custom prompt",
-			prompt:       "Do something specific",
-			wantContains: []string{"Do something specific"},
-			wantAbsent:   []string{"State your role"},
+			name:     "model override",
+			args:     []string{"--model", "sonnet"},
+			wantArgs: []string{"--agent", "rb-orchestrator", "--model", "sonnet", "State your role and mission, then assess the board and begin orchestration."},
+			wantName: "claude",
 		},
 		{
-			name:   "resume skips agent and prompt",
-			resume: "abc-123-session-id",
-			wantContains: []string{
-				"--resume", "abc-123-session-id",
-			},
-			wantAbsent: []string{
-				"--agent",
-				"State your role",
-			},
+			name:     "resume with ID",
+			args:     []string{"--resume", "abc-123"},
+			wantArgs: []string{"--resume", "abc-123"},
+			wantName: "claude",
+		},
+		{
+			name:     "resume without ID opens picker",
+			args:     []string{"--resume"},
+			wantArgs: []string{"--resume"},
+			wantName: "claude",
+		},
+		{
+			name:     "continue",
+			args:     []string{"--continue"},
+			wantArgs: []string{"--continue"},
+			wantName: "claude",
+		},
+		{
+			name:     "resume ignores custom prompt",
+			args:     []string{"--resume", "abc-123", "--prompt", "ignored"},
+			wantArgs: []string{"--resume", "abc-123"},
+			wantName: "claude",
+		},
+		{
+			name:     "continue ignores custom prompt",
+			args:     []string{"--continue", "--prompt", "ignored"},
+			wantArgs: []string{"--continue"},
+			wantName: "claude",
+		},
+		{
+			name:     "resume beats continue",
+			args:     []string{"--resume", "abc-123", "--continue"},
+			wantArgs: []string{"--resume", "abc-123"},
+			wantName: "claude",
+		},
+		{
+			name:     "passthrough flags",
+			args:     []string{"--", "--dangerously-skip-permissions"},
+			wantArgs: []string{"--agent", "rb-orchestrator", "--dangerously-skip-permissions", "State your role and mission, then assess the board and begin orchestration."},
+			wantName: "claude",
+		},
+		{
+			name:     "resume with model and passthrough",
+			args:     []string{"--resume", "abc-123", "--model", "sonnet", "--", "--verbose"},
+			wantArgs: []string{"--resume", "abc-123", "--model", "sonnet", "--verbose"},
+			wantName: "claude",
+		},
+		{
+			name:     "custom agent name",
+			args:     []string{"--name", "orchestrator-1"},
+			wantName: "orchestrator-1",
+		},
+		{
+			name:     "stop mode",
+			args:     []string{"--stop-mode", "autonomous"},
+			wantName: "claude",
+			wantStop: "autonomous",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			args := buildClaudeArgs(tt.model, tt.prompt, tt.resume, tt.passthrough)
-			joined := strings.Join(args, " ")
+			// Run in temp dir so --plugin-dir is absent (tested separately).
+			t.Chdir(t.TempDir())
 
-			t.Logf("args: %v", args)
-			t.Logf("joined: %s", joined)
+			session, err := parseClaudeFlags(tt.args)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			for _, want := range tt.wantContains {
-				found := false
-				for _, a := range args {
-					if strings.Contains(a, want) {
-						found = true
+			// Exact arg list comparison when wantArgs is specified.
+			if tt.wantArgs != nil {
+				if len(session.claudeArgs) != len(tt.wantArgs) {
+					t.Fatalf("args length = %d, want %d\n  got:  %v\n  want: %v",
+						len(session.claudeArgs), len(tt.wantArgs), session.claudeArgs, tt.wantArgs)
+				}
+				for i := range tt.wantArgs {
+					if session.claudeArgs[i] != tt.wantArgs[i] {
+						t.Errorf("args[%d] = %q, want %q\n  full: %v", i, session.claudeArgs[i], tt.wantArgs[i], session.claudeArgs)
 						break
 					}
-				}
-				if !found {
-					t.Errorf("expected args to contain %q, got: %v", want, args)
 				}
 			}
 
-			for _, absent := range tt.wantAbsent {
-				for _, a := range args {
-					if strings.Contains(a, absent) {
-						t.Errorf("expected args NOT to contain %q, got: %v", absent, args)
-						break
-					}
-				}
+			if tt.wantName != "" && session.agentName != tt.wantName {
+				t.Errorf("agentName = %q, want %q", session.agentName, tt.wantName)
+			}
+			if tt.wantStop != "" && session.stopMode != tt.wantStop {
+				t.Errorf("stopMode = %q, want %q", session.stopMode, tt.wantStop)
 			}
 		})
 	}
@@ -150,7 +200,7 @@ func TestBuildClaudeArgs_PluginDir(t *testing.T) {
 			t.Fatalf("WriteFile: %v", err)
 		}
 
-		args := buildClaudeArgs("", "", "", nil)
+		args := buildClaudeArgs("", "", "", false, false, nil)
 		found := false
 		for _, a := range args {
 			if a == "--plugin-dir" {
@@ -167,7 +217,7 @@ func TestBuildClaudeArgs_PluginDir(t *testing.T) {
 		dir := t.TempDir()
 		t.Chdir(dir)
 
-		args := buildClaudeArgs("", "", "", nil)
+		args := buildClaudeArgs("", "", "", false, false, nil)
 		for _, a := range args {
 			if a == "--plugin-dir" {
 				t.Errorf("expected no --plugin-dir when plugin absent, got: %v", args)
@@ -175,6 +225,65 @@ func TestBuildClaudeArgs_PluginDir(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestNormalizeOptionalFlag(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want []string
+	}{
+		{
+			name: "bare flag at end",
+			args: []string{"--resume"},
+			want: []string{"--resume="},
+		},
+		{
+			name: "bare flag before another flag",
+			args: []string{"--resume", "--stop-mode", "batch"},
+			want: []string{"--resume=", "--stop-mode", "batch"},
+		},
+		{
+			name: "flag with value",
+			args: []string{"--resume", "abc123"},
+			want: []string{"--resume", "abc123"},
+		},
+		{
+			name: "flag with equals syntax",
+			args: []string{"--resume=abc123"},
+			want: []string{"--resume=abc123"},
+		},
+		{
+			name: "flag absent",
+			args: []string{"--stop-mode", "batch"},
+			want: []string{"--stop-mode", "batch"},
+		},
+		{
+			name: "short form bare",
+			args: []string{"-resume"},
+			want: []string{"--resume="},
+		},
+		{
+			name: "short form with value",
+			args: []string{"-resume", "abc123"},
+			want: []string{"-resume", "abc123"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := normalizeOptionalFlag(tt.args, "resume")
+			if len(got) != len(tt.want) {
+				t.Fatalf("got %v, want %v", got, tt.want)
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("arg[%d] = %q, want %q (full: %v)", i, got[i], tt.want[i], got)
+					break
+				}
+			}
+		})
+	}
 }
 
 func TestSetConfigField_CreatesNewFile(t *testing.T) {

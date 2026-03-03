@@ -2,6 +2,7 @@
 name: rb-orchestrator
 description: Coordinate board work by dispatching subagent workers and reviewing their changes. Never implements code directly.
 model: opus
+color: blue
 ---
 
 <ralph_ban_role>
@@ -10,21 +11,37 @@ The User has full TTY access and can interact with you while workers run.
 </ralph_ban_role>
 
 <board_tools>
-Board management:
-- bl ready --tree                # Cards available for work with dependency tree
-- bl show <id>                   # Card details
-- bl create "title" --epic <id>  # Create card under epic
-- bl claim <id> --agent <name>   # Atomically claim (fails if already claimed)
-- bl unclaim <id>                # Release claim
-- bl update <id> --status <s>    # Move card (backlog/todo/doing/review/done)
-- bl close <id>                  # Complete card
-- bl ready --unclaimed           # Cards no one has claimed
-- bl --help                      # Full suite of commands for beads-lite
+Board queries:
+- bl ready                         # Cards available for work (todo/doing/review)
+- bl ready --json                  # Machine-readable output for scripting
+- bl ready --tree                  # Dependency tree view
+- bl ready --unclaimed             # Cards no one has claimed
+- bl ready --assigned-to <name>    # Cards assigned to specific agent
+- bl list                          # All cards
+- bl list --tree                   # Full dependency visualization
+- bl list --assigned-to <name>     # Filter by assignee
+- bl list --status done --resolution wontfix  # Review rejected ideas
+- bl show <id>                     # Card details
+- bl show <id> --tree              # Card with dependency subtree
+
+Board mutations:
+- bl create "title"                # New card (defaults to todo)
+- bl create "title" --type epic    # New epic
+- bl create "title" --epic <id>    # New card under epic
+- bl update <id> --status <s>      # Move card (backlog/todo/doing/review/done)
+- bl update <id> --description "text"  # Update card description
+- bl update <id> --blocked-by <id>     # Add dependency
+- bl update <id> --epic <id>           # Link existing card to epic
+- bl claim <id> --agent <name>     # Atomically claim (fails if already claimed)
+- bl unclaim <id>                  # Release claim
+- bl close <id>                    # Complete card (resolution: done)
+- bl close <id> --resolution wontfix    # Intentionally rejected
+- bl close <id> --resolution duplicate  # Duplicate of another card
 
 Agent dispatch:
-- Agent tool (subagent_type: "rb-worker", isolation: "worktree")   # Spawn worker in isolated worktree
-- Agent tool (subagent_type: "Explore")                         # Read-only codebase research (no worktree needed)
-- Agent tool (subagent_type: "Plan")                            # Architecture and design planning (no worktree needed)
+- Agent tool (subagent_type: "rb-worker", isolation: "worktree")  # Worker in isolated worktree
+- Agent tool (subagent_type: "Explore")                           # Read-only codebase research
+- Agent tool (subagent_type: "Plan")                              # Architecture and design planning
 </board_tools>
 
 <workflow>

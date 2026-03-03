@@ -11,21 +11,28 @@ import (
 	"syscall"
 )
 
-// runClaude starts a Claude Code session with the orchestrator agent.
-// The ralph-ban plugin must be installed via Claude Code's plugin system;
-// hooks, agents, and settings are resolved from the plugin cache automatically.
-// BL_ROOT is set to cwd so hooks can find the project's beads-lite database.
-//
-// Flags before -- are ralph-ban's; flags after -- pass through to claude.
-// Example: ralph-ban claude --stop-mode batch -- --dangerously-skip-permissions
-func runClaude(args []string) {
+// claudeSession holds the parsed result of CLI flag processing.
+// Extracted from runClaude so the full parsing pipeline
+// (splitAtDoubleDash -> normalizeOptionalFlag -> flag.Parse -> fs.Visit -> buildClaudeArgs)
+// can be tested end-to-end without exec.
+type claudeSession struct {
+	claudeArgs []string
+	agentName  string
+	stopMode   string
+}
+
+// parseClaudeFlags processes raw CLI args through the full parsing pipeline.
+// This is the testable core of runClaude — everything except exec and env setup.
+// Uses ContinueOnError so --help returns flag.ErrHelp instead of calling os.Exit.
+func parseClaudeFlags(args []string) (*claudeSession, error) {
 	flagArgs, passthrough := splitAtDoubleDash(args)
 
-	fs := flag.NewFlagSet("claude", flag.ExitOnError)
+	fs := flag.NewFlagSet("claude", flag.ContinueOnError)
 	name := fs.String("name", "claude", "agent name (flows to hooks via CLAUDE_AGENT_NAME)")
 	model := fs.String("model", "", "override the agent's default model (opus, sonnet, haiku)")
 	prompt := fs.String("prompt", "", "initial prompt (also accepted as positional arg)")
 	resume := fs.String("resume", "", "resume a session by ID, or empty string for picker")
+	cont := fs.Bool("continue", false, "continue the most recent session")
 	stopMode := fs.String("stop-mode", "", "stop hook mode: batch (default) or autonomous")
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, `Usage: ralph-ban claude [flags] [prompt] [-- claude-flags...]
@@ -39,16 +46,57 @@ Flags:
 		fmt.Fprintf(os.Stderr, `
 Examples:
   ralph-ban claude                              # default orchestrator session
-  ralph-ban claude --stop-mode batch            # stop after dispatched work completes
+  ralph-ban claude --stop-mode autonomous       # drain the board without intervention
   ralph-ban claude "assess the board"           # custom prompt
+  ralph-ban claude --continue                    # continue most recent session
+  ralph-ban claude --resume                     # interactive session picker
+  ralph-ban claude --resume abc123              # resume specific session
   ralph-ban claude -- --dangerously-skip-permissions  # pass flags to claude
 `)
 	}
-	fs.Parse(flagArgs)
+
+	if err := fs.Parse(normalizeOptionalFlag(flagArgs, "resume")); err != nil {
+		return nil, err
+	}
+
+	// Detect whether --resume was explicitly passed. Go's flag package
+	// can't distinguish "not passed" from "passed with empty string" via
+	// the pointer value alone — both give "". fs.Visit only iterates
+	// flags that were explicitly set, so this is the reliable check.
+	resumeSet := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "resume" {
+			resumeSet = true
+		}
+	})
 
 	// Positional arg after flags = prompt (mirrors claude's own interface).
 	if fs.NArg() > 0 && *prompt == "" {
 		*prompt = fs.Arg(0)
+	}
+
+	return &claudeSession{
+		claudeArgs: buildClaudeArgs(*model, *prompt, *resume, resumeSet, *cont, passthrough),
+		agentName:  *name,
+		stopMode:   *stopMode,
+	}, nil
+}
+
+// runClaude starts a Claude Code session with the orchestrator agent.
+// The ralph-ban plugin must be installed via Claude Code's plugin system;
+// hooks, agents, and settings are resolved from the plugin cache automatically.
+// BL_ROOT is set to cwd so hooks can find the project's beads-lite database.
+//
+// Flags before -- are ralph-ban's; flags after -- pass through to claude.
+// Example: ralph-ban claude --stop-mode batch -- --dangerously-skip-permissions
+func runClaude(args []string) {
+	session, err := parseClaudeFlags(args)
+	if err != nil {
+		if err == flag.ErrHelp {
+			os.Exit(0)
+		}
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 
 	claudeBin, err := exec.LookPath("claude")
@@ -57,15 +105,13 @@ Examples:
 		os.Exit(1)
 	}
 
-	claudeArgs := buildClaudeArgs(*model, *prompt, *resume, passthrough)
-
 	// Set agent name so hooks can identify this session.
-	os.Setenv("CLAUDE_AGENT_NAME", *name)
+	os.Setenv("CLAUDE_AGENT_NAME", session.agentName)
 
 	// Set stop mode as env var so hooks see it for this session only.
 	// Precedence: flag > env > config file > "batch" default.
-	if *stopMode != "" {
-		os.Setenv("RALPH_BAN_STOP_MODE", *stopMode)
+	if session.stopMode != "" {
+		os.Setenv("RALPH_BAN_STOP_MODE", session.stopMode)
 	}
 
 	// Set BL_ROOT so workers in worktrees resolve the database from the project root.
@@ -73,7 +119,7 @@ Examples:
 	os.Setenv("BL_ROOT", projectRoot())
 
 	// Replace this process with claude for clean signal handling.
-	if err := syscall.Exec(claudeBin, append([]string{"claude"}, claudeArgs...), os.Environ()); err != nil {
+	if err := syscall.Exec(claudeBin, append([]string{"claude"}, session.claudeArgs...), os.Environ()); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to exec claude: %v\n", err)
 		os.Exit(1)
 	}
@@ -85,8 +131,14 @@ Examples:
 // installing via `claude plugin marketplace add` / `claude plugin install`.
 // If the extracted plugin doesn't exist (old installs), --plugin-dir is skipped
 // and Claude Code falls back to the plugin cache.
+//
+// Three mutually exclusive session modes:
+//   - new (default): loads --agent rb-orchestrator with a default prompt
+//   - resume (resumeSet): passes --resume [id] to continue a previous session
+//   - continue (cont): passes --continue to pick up the most recent session
+//
 // passthrough args are appended last — these come from after -- in the CLI.
-func buildClaudeArgs(model, prompt, resume string, passthrough []string) []string {
+func buildClaudeArgs(model, prompt, resume string, resumeSet, cont bool, passthrough []string) []string {
 	var args []string
 
 	// Load plugin from extracted directory if it exists.
@@ -96,11 +148,19 @@ func buildClaudeArgs(model, prompt, resume string, passthrough []string) []strin
 		args = append(args, "--plugin-dir", pluginDir)
 	}
 
-	// Resuming a session: pass --resume and skip --agent (the resumed session
-	// already has its agent context). Also skip the default prompt.
-	if resume != "" {
-		args = append(args, "--resume", resume)
-	} else {
+	// Existing session: pass through the resume/continue flag and skip --agent
+	// and the default prompt (the session already has its agent context).
+	existingSession := resumeSet || cont
+	switch {
+	case resumeSet:
+		if resume != "" {
+			args = append(args, "--resume", resume)
+		} else {
+			args = append(args, "--resume")
+		}
+	case cont:
+		args = append(args, "--continue")
+	default:
 		args = append(args, "--agent", "rb-orchestrator")
 	}
 
@@ -112,9 +172,9 @@ func buildClaudeArgs(model, prompt, resume string, passthrough []string) []strin
 	// Pass through any claude-native flags (e.g. --dangerously-skip-permissions).
 	args = append(args, passthrough...)
 
-	// Initial prompt as positional argument. Skipped when resuming —
-	// the resumed session continues where it left off.
-	if resume == "" {
+	// Initial prompt as positional argument. Skipped for existing sessions —
+	// they continue where they left off.
+	if !existingSession {
 		if prompt == "" {
 			prompt = "State your role and mission, then assess the board and begin orchestration."
 		}
@@ -122,6 +182,37 @@ func buildClaudeArgs(model, prompt, resume string, passthrough []string) []strin
 	}
 
 	return args
+}
+
+// normalizeOptionalFlag rewrites a bare --flag (no value) to --flag= so Go's
+// flag.String parser accepts it. Without this, `--resume` without a value
+// produces "flag needs an argument" because flag.String always expects one.
+//
+// The rule: if --flag or -flag appears and the next arg starts with "-" or
+// is absent, the flag has no value and we rewrite it to --flag=.
+// If the flag already uses "=" syntax (--flag=value), it's left alone.
+func normalizeOptionalFlag(args []string, name string) []string {
+	long := "--" + name
+	short := "-" + name
+	prefix := long + "="
+	shortPrefix := short + "="
+
+	out := make([]string, len(args))
+	copy(out, args)
+
+	for i, a := range out {
+		// Already has explicit value via "=".
+		if strings.HasPrefix(a, prefix) || strings.HasPrefix(a, shortPrefix) {
+			continue
+		}
+		if a == long || a == short {
+			// Check if the next arg looks like a value (not another flag).
+			if i+1 >= len(out) || strings.HasPrefix(out[i+1], "-") {
+				out[i] = long + "="
+			}
+		}
+	}
+	return out
 }
 
 // splitAtDoubleDash splits args at the first "--" separator.

@@ -31,8 +31,9 @@ Quick start:
 Run the orchestrator:
   ralph-ban claude                              # batch mode (pauses for human merge approval)
   ralph-ban claude --stop-mode autonomous       # works until the board is empty
-  ralph-ban claude --resume ""                  # resume last session (interactive picker)
-  ralph-ban claude -- --dangerously-skip-permissions  # skip permission prompts
+  ralph-ban claude --continue                   # continue most recent session
+  ralph-ban claude --resume                     # interactive session picker
+  ralph-ban claude --resume abc123              # resume specific session
 
 Snapshots:
   ralph-ban snapshot                            # JSON to stdout
