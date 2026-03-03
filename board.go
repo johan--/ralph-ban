@@ -264,7 +264,11 @@ func (b *board) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, keys.SortToggle):
 			return b.handleSortToggle()
 		case key.Matches(msg, keys.Back):
-			return b.handleClearFilter()
+			if b.filter.field != filterNone {
+				return b.handleClearFilter()
+			}
+			// No filter active — fall through to focused column so Esc can
+			// deselect items or dismiss column-level state.
 		}
 	}
 
