@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# SessionStart hook: reads board state, sets baseline snapshot, suggests next task.
-# Output: hookSpecificOutput.additionalContext (injected into Claude's initial context).
+# SessionStart hook: reads board state, sets baseline snapshot, orients the agent.
+# Agent context gets a status-aware directive so minimal user input is needed.
+# User-visible message gets a clean board summary.
 # Exit 0 always — SessionStart cannot block.
 set -euo pipefail
 trap 'echo "{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"Hook error in $(basename "$0"): $BASH_COMMAND failed\"}}" 2>/dev/null; exit 0' ERR
@@ -37,32 +38,51 @@ total=$(echo "$ready" | wc -l | tr -d ' ')
 # finishing them is always higher priority than starting new todo items.
 doing=$(echo "$ready" | jq -c 'select(.status == "doing")' 2>/dev/null)
 review=$(echo "$ready" | jq -c 'select(.status == "review")' 2>/dev/null)
+todo=$(echo "$ready" | jq -c 'select(.status == "todo")' 2>/dev/null)
 
-# Pick the most urgent item: doing > review > first ready.
-if [ -n "$doing" ]; then
-  first=$(echo "$doing" | head -1)
-  action="Resume in-progress"
-elif [ -n "$review" ]; then
-  first=$(echo "$review" | head -1)
-  action="Review waiting"
-else
-  first=$(echo "$ready" | head -1)
-  action="Next up"
+todo_count=0
+if [ -n "$todo" ]; then
+  todo_count=$(echo "$todo" | wc -l | tr -d ' ')
 fi
-
-title=$(echo "$first" | jq -r '.title // "unknown"')
-id=$(echo "$first" | jq -r '.id // "unknown"')
-status=$(echo "$first" | jq -r '.status // "unknown"')
 
 # Include stop mode so the orchestrator knows its behavior from the first message.
 stop_mode=$(read_stop_mode)
 
-board_summary="Board has ${total} ready items. ${action}: '${title}' (${id}, ${status}). Stop mode: ${stop_mode}."
+# Build status-aware directive for agent context and clean summary for user.
+# Doing > review > todo priority. The directive tells the agent what to do;
+# the summary tells the user what the board looks like.
+if [ -n "$doing" ]; then
+  first=$(echo "$doing" | head -1)
+  title=$(echo "$first" | jq -r '.title // "unknown"')
+  id=$(echo "$first" | jq -r '.id // "unknown"')
+  doing_count=$(echo "$doing" | wc -l | tr -d ' ')
+
+  user_msg="Board has ${total} ready items. ${doing_count} in progress. Stop mode: ${stop_mode}."
+  agent_ctx="Board: ${doing_count} doing, ${todo_count} todo. Resume in-progress work on '${title}' (${id}). Stop mode: ${stop_mode}."
+
+elif [ -n "$review" ]; then
+  first=$(echo "$review" | head -1)
+  title=$(echo "$first" | jq -r '.title // "unknown"')
+  id=$(echo "$first" | jq -r '.id // "unknown"')
+  review_count=$(echo "$review" | wc -l | tr -d ' ')
+
+  user_msg="Board has ${total} ready items. ${review_count} awaiting review. Stop mode: ${stop_mode}."
+  agent_ctx="Board: ${review_count} review, ${todo_count} todo. Review '${title}' (${id}) first — unblock the review queue before starting new work. Stop mode: ${stop_mode}."
+
+else
+  first=$(echo "$ready" | head -1)
+  title=$(echo "$first" | jq -r '.title // "unknown"')
+  id=$(echo "$first" | jq -r '.id // "unknown"')
+
+  user_msg="Board has ${todo_count} ready items. Highest priority: '${title}' (${id}, todo). Stop mode: ${stop_mode}."
+  agent_ctx="Board has ${todo_count} unclaimed todo cards. Highest priority: ${id}: ${title}. Consider delegating to worker agents in isolated worktrees. Stop mode: ${stop_mode}."
+fi
 
 # Append rate limit pause notice if active.
 pause_info=$(check_rate_limit_pause 2>/dev/null || true)
 if [ -n "$pause_info" ]; then
-  board_summary="${board_summary} ${pause_info}"
+  agent_ctx="${agent_ctx} ${pause_info}"
+  user_msg="${user_msg} ${pause_info}"
 fi
 
-emit_context "$board_summary"
+emit_context "$agent_ctx" "$user_msg"
