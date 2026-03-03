@@ -18,7 +18,7 @@ import (
 type claudeSession struct {
 	claudeArgs []string
 	agentName  string
-	stopMode   string
+	auto       bool
 }
 
 // parseClaudeFlags processes raw CLI args through the full parsing pipeline.
@@ -33,7 +33,7 @@ func parseClaudeFlags(args []string) (*claudeSession, error) {
 	prompt := fs.String("prompt", "", "initial prompt (also accepted as positional arg)")
 	resume := fs.String("resume", "", "resume a session by ID, or empty string for picker")
 	cont := fs.Bool("continue", false, "continue the most recent session")
-	stopMode := fs.String("stop-mode", "", "stop hook mode: batch (default) or autonomous")
+	auto := fs.Bool("auto", false, "autonomous mode: drain the board without pausing")
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, `Usage: ralph-ban claude [flags] [prompt] [-- claude-flags...]
 
@@ -46,7 +46,7 @@ Flags:
 		fmt.Fprintf(os.Stderr, `
 Examples:
   ralph-ban claude                              # default orchestrator session
-  ralph-ban claude --stop-mode autonomous       # drain the board without intervention
+  ralph-ban claude --auto                        # drain the board without intervention
   ralph-ban claude "assess the board"           # custom prompt
   ralph-ban claude --continue                    # continue most recent session
   ralph-ban claude --resume                     # interactive session picker
@@ -78,7 +78,7 @@ Examples:
 	return &claudeSession{
 		claudeArgs: buildClaudeArgs(*model, *prompt, *resume, resumeSet, *cont, passthrough),
 		agentName:  *name,
-		stopMode:   *stopMode,
+		auto:       *auto,
 	}, nil
 }
 
@@ -88,7 +88,7 @@ Examples:
 // BL_ROOT is set to cwd so hooks can find the project's beads-lite database.
 //
 // Flags before -- are ralph-ban's; flags after -- pass through to claude.
-// Example: ralph-ban claude --stop-mode batch -- --dangerously-skip-permissions
+// Example: ralph-ban claude --auto -- --dangerously-skip-permissions
 func runClaude(args []string) {
 	session, err := parseClaudeFlags(args)
 	if err != nil {
@@ -109,9 +109,9 @@ func runClaude(args []string) {
 	os.Setenv("CLAUDE_AGENT_NAME", session.agentName)
 
 	// Set stop mode as env var so hooks see it for this session only.
-	// Precedence: flag > env > config file > "batch" default.
-	if session.stopMode != "" {
-		os.Setenv("RALPH_BAN_STOP_MODE", session.stopMode)
+	// --auto maps to "autonomous"; absence falls through to config file or "batch" default.
+	if session.auto {
+		os.Setenv("RALPH_BAN_STOP_MODE", "autonomous")
 	}
 
 	// Set BL_ROOT so workers in worktrees resolve the database from the project root.

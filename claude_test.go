@@ -16,8 +16,8 @@ func TestParseClaudeFlags(t *testing.T) {
 		name     string
 		args     []string
 		wantArgs []string // exact claude args (order matters)
-		wantName string   // expected agentName
-		wantStop string   // expected stopMode
+		wantName string // expected agentName
+		wantAuto bool   // expected auto mode
 		wantErr  bool
 	}{
 		{
@@ -98,10 +98,10 @@ func TestParseClaudeFlags(t *testing.T) {
 			wantName: "orchestrator-1",
 		},
 		{
-			name:     "stop mode",
-			args:     []string{"--stop-mode", "autonomous"},
+			name:     "auto mode",
+			args:     []string{"--auto"},
 			wantName: "claude",
-			wantStop: "autonomous",
+			wantAuto: true,
 		},
 	}
 
@@ -138,8 +138,8 @@ func TestParseClaudeFlags(t *testing.T) {
 			if tt.wantName != "" && session.agentName != tt.wantName {
 				t.Errorf("agentName = %q, want %q", session.agentName, tt.wantName)
 			}
-			if tt.wantStop != "" && session.stopMode != tt.wantStop {
-				t.Errorf("stopMode = %q, want %q", session.stopMode, tt.wantStop)
+			if tt.wantAuto && !session.auto {
+				t.Error("expected auto=true, got false")
 			}
 		})
 	}
