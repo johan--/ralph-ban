@@ -39,7 +39,19 @@ claimed=$("$BL" list --assigned-to "$AGENT_NAME" --json 2>/dev/null | jq -r 'sel
 
 stop_mode=$(read_stop_mode)
 
-parts=("Board state at compaction:")
+# Re-inject orchestrator identity — after compaction the agent definition
+# frontmatter and SessionStart context get summarized away, causing the
+# agent to forget its role. This compact reminder restores the essentials.
+role_guidance="You are a Ralph-Ban orchestrator. Read the board, dispatch worker agents in isolated worktrees (Agent tool with subagent_type: \"worker\", isolation: \"worktree\"), review their diffs, and merge approved changes. Never implement code directly. In ${stop_mode} mode."
+if [ "$stop_mode" = "autonomous" ]; then
+  role_guidance="${role_guidance} Autonomous: self-dispatch without user approval. Your review is the quality gate. Do not ask permission to merge."
+else
+  role_guidance="${role_guidance} Batch: present plans and wait for user approval before dispatching and merging."
+fi
+
+parts=("${role_guidance}")
+parts+=("")
+parts+=("Board state at compaction:")
 parts+=("$summary")
 parts+=("Stop mode: ${stop_mode}")
 if [ -n "$claimed" ]; then
