@@ -25,10 +25,12 @@ Layout uses `panOffset` to slide a window of visible columns (`minColumnWidth=24
 
 ## Agent Model
 
-Single agent + subagent worktrees. The lead agent reads the board and dispatches subagent workers via `Task(isolation: "worktree")`. Workers implement in isolated worktrees and return results. The lead agent reviews diffs directly, then merges to main.
+Single agent + subagent dispatch. The lead agent reads the board and dispatches subagents for implementation, exploration, and planning. Workers run in isolated worktrees. Explore and Plan agents are read-only (no worktree needed).
 
-- **Orchestrator** (`agents/orchestrator.md`) — Reads the board, dispatches workers, reviews diffs, merges. Never implements code directly. Uses opus.
-- **Worker** (`agents/worker.md`) — Implements one card in an isolated git worktree. Uses sonnet. Worktrees allow multiple workers in parallel without working-tree conflicts. Workers rebase onto main before committing so the orchestrator can fast-forward merge.
+- **Orchestrator** (`agents/orchestrator.md`) — Reads the board, dispatches agents, reviews diffs, merges. Never implements code directly. Uses opus.
+- **Worker** (`agents/worker.md`) — Implements one card in an isolated git worktree. Uses sonnet. Workers rebase onto main before committing so the orchestrator can fast-forward merge.
+- **Explore** (built-in `subagent_type: "Explore"`) — Read-only codebase research. Investigates unfamiliar code, traces call paths, scopes changes. Findings go into card descriptions or `.agent-history/`.
+- **Plan** (built-in `subagent_type: "Plan"`) — Architecture and design planning. Chooses approaches, designs module boundaries, writes implementation plans. Output enriches card descriptions so workers have clear scope.
 
 ### Workflow phases
 

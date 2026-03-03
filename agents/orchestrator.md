@@ -22,7 +22,9 @@ Board management:
 - bl --help                      # Full suite of commands for beads-lite
 
 Agent dispatch:
-- Task tool (subagent_type: "worker", isolation: "worktree")   # Spawn worker in isolated worktree
+- Agent tool (subagent_type: "worker", isolation: "worktree")   # Spawn worker in isolated worktree
+- Agent tool (subagent_type: "Explore")                         # Read-only codebase research (no worktree needed)
+- Agent tool (subagent_type: "Plan")                            # Architecture and design planning (no worktree needed)
 </board_tools>
 
 <workflow>
@@ -30,6 +32,22 @@ PHASE 1 - ASSESS: Check the board, plan the work
   bl ready --json -> see available cards
   bl list --tree -> understand dependencies
   Identify cards that can be worked in parallel.
+
+  For each card, decide the right agent type:
+  - **Worker** (subagent_type: "worker", isolation: "worktree") — implementation cards with
+    clear scope. The card says what to build/fix and which files to touch.
+  - **Explore** (subagent_type: "Explore") — cards that need investigation first: understanding
+    unfamiliar code, tracing call paths, scoping a large change. Explore agents are read-only
+    (no file edits). Their findings go into the card description via `bl update <id> --description`
+    or into `.agent-history/` for longer investigations. No worktree needed.
+  - **Plan** (subagent_type: "Plan") — cards that need architectural design before implementation:
+    choosing between approaches, designing module boundaries, writing implementation plans.
+    Plan agents are read-only. Output goes into card descriptions or `.agent-history/`.
+
+  Explore and Plan agents don't need worktree isolation (they can't edit files). They also
+  don't count against WIP limits since they're read-only and don't produce merge work.
+  Dispatch them freely alongside workers. Their output enriches card descriptions so
+  workers dispatched later have clear scope and context.
 
   Check WIP limits before planning dispatches. Read `.ralph-ban/config.json`
   for `wip_limits` (map of column name to max count). If the "doing" column
@@ -50,11 +68,21 @@ PHASE 2 - DISPATCH: Create workers for parallel tasks
   worktree produces deeply nested paths (.claude/worktrees/X/.claude/worktrees/Y/...) that
   break go.work resolution, prevent branch checkouts, and waste agent turns navigating.
   Commit or stash any local changes first — workers inherit your working tree.
-  For each card:
-    Task tool (subagent_type: "worker", isolation: "worktree",
+  For implementation cards:
+    Agent tool (subagent_type: "worker", isolation: "worktree",
       name: "<card-id>",
       prompt: "Your card: <id> — <title>. <description>.
               Modify only: <file1>, <file2>, ...")
+  For exploration/planning cards:
+    Agent tool (subagent_type: "Explore", run_in_background: true,
+      prompt: "Investigate <card-id>: <title>. <description>.
+              Report: what you found, recommended approach, affected files.")
+    Agent tool (subagent_type: "Plan", run_in_background: true,
+      prompt: "Design plan for <card-id>: <title>. <description>.
+              Produce: step-by-step implementation plan with file scope.")
+  After an Explore/Plan agent returns, update the card with findings:
+    bl update <id> --description "<original description>\n\n## Investigation\n<findings>"
+  Then re-assess whether the card is ready for a worker or needs further breakdown.
   Before spawning any worker, write the activity marker so the stop hook
   pauses cleanly while workers run:
     touch .ralph-ban/.workers-active
