@@ -288,7 +288,7 @@ func (c *column) ViewVertical(termWidth int) string {
 	}
 	renderedHeader := headerStyle.Render(header)
 
-	// Render each card as a compact single line: "  > title [P0]" or "    title [P1]"
+	// Render each card as a compact single line: "  icon title [P0]" or "  > icon title [P0]"
 	items := c.list.Items()
 	selectedIdx := c.list.Index()
 	var cardLines []string
@@ -298,16 +298,18 @@ func (c *column) ViewVertical(termWidth int) string {
 			continue
 		}
 
-		// Truncate title to leave room for priority tag and cursor prefix.
-		// termWidth - border(2) - padding(2) - cursor(2) - priority(5) - spaces(2)
-		maxTitle := termWidth - 13
+		typeIcon := issueTypeIcon(cd.issue.Type)
+
+		// Truncate title to leave room for icon, priority tag, and cursor prefix.
+		// termWidth - border(2) - padding(2) - cursor(2) - icon+space(3) - priority(5) - spaces(2)
+		maxTitle := termWidth - 16
 		if maxTitle < 10 {
 			maxTitle = 10
 		}
 		title := truncateTitleForWidth(cd.issue.Title, maxTitle)
 
 		priorityTag := fmt.Sprintf("[P%d]", cd.issue.Priority)
-		line := fmt.Sprintf("  %-*s %s", maxTitle, title, priorityTag)
+		line := fmt.Sprintf("  %s %-*s %s", typeIcon, maxTitle, title, priorityTag)
 
 		var lineStyle lipgloss.Style
 		if c.focus && i == selectedIdx {
@@ -331,10 +333,7 @@ func (c *column) ViewVertical(termWidth int) string {
 
 	// Apply border: focused uses rounded, blurred uses hidden (same width for alignment).
 	const borderWidth = 2
-	innerWidth := termWidth - borderWidth
-	if innerWidth < 1 {
-		innerWidth = 1
-	}
+	innerWidth := max(termWidth-borderWidth, 1)
 
 	var borderStyle lipgloss.Style
 	if c.focus {
