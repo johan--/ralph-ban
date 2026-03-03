@@ -303,3 +303,113 @@ func TestDoneColumnFocusDoesNotProduceAgeTint(t *testing.T) {
 		t.Error("age-aware delegate should tint stale cards, but output matched plain delegate")
 	}
 }
+
+// Title truncation tests
+
+func TestTruncateTitleForWidth_ShortTitle(t *testing.T) {
+	got := truncateTitleForWidth("Hello", 20)
+	if got != "Hello" {
+		t.Errorf("truncateTitleForWidth short title = %q, want %q", got, "Hello")
+	}
+}
+
+func TestTruncateTitleForWidth_ExactFit(t *testing.T) {
+	title := "1234567890" // 10 ASCII chars = 10 cols
+	got := truncateTitleForWidth(title, 10)
+	if got != title {
+		t.Errorf("truncateTitleForWidth exact fit = %q, want %q", got, title)
+	}
+}
+
+func TestTruncateTitleForWidth_TooLong(t *testing.T) {
+	title := "This is a very long card title that should be truncated"
+	maxCols := 20
+	got := truncateTitleForWidth(title, maxCols)
+	if len(got) > maxCols {
+		t.Errorf("truncateTitleForWidth result %q has length %d, want <= %d", got, len(got), maxCols)
+	}
+	if got[len(got)-3:] != "..." {
+		t.Errorf("truncateTitleForWidth result %q does not end with '...'", got)
+	}
+}
+
+func TestTruncateTitleForWidth_UsesASCIIDots(t *testing.T) {
+	title := "Somewhat long title for testing"
+	got := truncateTitleForWidth(title, 15)
+	if got[len(got)-3:] != "..." {
+		t.Errorf("expected ASCII '...', got %q suffix", got[len(got)-3:])
+	}
+	for _, r := range got {
+		if r == '…' {
+			t.Errorf("truncateTitleForWidth used unicode ellipsis '…' in %q", got)
+		}
+	}
+}
+
+func TestTruncateTitleForWidth_ZeroWidth(t *testing.T) {
+	title := "Any title"
+	got := truncateTitleForWidth(title, 0)
+	if got != title {
+		t.Errorf("truncateTitleForWidth(zero) = %q, want %q", got, title)
+	}
+}
+
+func TestRenderedCard_TitleOverride(t *testing.T) {
+	original := card{issue: &beadslite.Issue{Title: "Long original title"}}
+	rc := renderedCard{card: original, truncatedTitle: "Long ori..."}
+	if rc.Title() != "Long ori..." {
+		t.Errorf("renderedCard.Title() = %q, want %q", rc.Title(), "Long ori...")
+	}
+	if rc.FilterValue() != "Long original title " {
+		t.Errorf("renderedCard.FilterValue() = %q, want original title + space", rc.FilterValue())
+	}
+}
+
+func TestTruncatingDelegateTruncatesLongTitle(t *testing.T) {
+	longTitle := "This card title is intentionally very long and must be clipped"
+	cd := card{issue: &beadslite.Issue{
+		ID:    "bl-x",
+		Title: longTitle,
+		Type:  beadslite.IssueTypeTask,
+	}}
+	m := makeListModel(cd) // width=40
+
+	del := newBlurredTruncatingDelegate()
+	var buf bytes.Buffer
+	del.Render(&buf, m, 0, cd)
+	rendered := buf.String()
+
+	if !containsASCIIDots(rendered) {
+		t.Errorf("truncatingDelegate did not produce '...' in output for long title\ngot: %q", rendered)
+	}
+}
+
+func TestAgeAwareDelegateTruncatesLongTitle(t *testing.T) {
+	longTitle := "This card title is intentionally very long and must be clipped"
+	cd := card{issue: &beadslite.Issue{
+		ID:        "bl-y",
+		Title:     longTitle,
+		Type:      beadslite.IssueTypeTask,
+		UpdatedAt: time.Now().Add(-1 * time.Hour), // fresh — no age tinting
+	}}
+	m := makeListModel(cd) // width=40
+
+	del := newBlurredAgeDelegate()
+	var buf bytes.Buffer
+	del.Render(&buf, m, 0, cd)
+	rendered := buf.String()
+
+	if !containsASCIIDots(rendered) {
+		t.Errorf("ageAwareDelegate did not produce '...' in output for long title\ngot: %q", rendered)
+	}
+}
+
+// containsASCIIDots reports whether s contains the three-char ASCII sequence "...".
+func containsASCIIDots(s string) bool {
+	for i := 0; i+2 < len(s); i++ {
+		if s[i] == '.' && s[i+1] == '.' && s[i+2] == '.' {
+			return true
+		}
+	}
+	return false
+}

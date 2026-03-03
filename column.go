@@ -10,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	beadslite "github.com/kylesnowschwartz/beads-lite"
 )
@@ -75,7 +76,14 @@ type column struct {
 func newColumn(idx columnIndex) column {
 	// Start with blurred delegate so unfocused columns never show
 	// selection highlights. The board calls Focus() on column 0.
-	delegate := newBlurredDelegate()
+	// Use truncating delegates from the start so titles are never rendered
+	// without ellipsis, even before the first Focus/Blur call.
+	var delegate list.ItemDelegate
+	if idx == colDone {
+		delegate = newBlurredTruncatingDelegate()
+	} else {
+		delegate = newBlurredAgeDelegate()
+	}
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.Title = columnTitles[idx]
 	l.SetShowHelp(false)
@@ -92,7 +100,7 @@ func newColumn(idx columnIndex) column {
 func (c *column) Focus() {
 	c.focus = true
 	if c.index == colDone {
-		c.list.SetDelegate(newFocusedDelegate())
+		c.list.SetDelegate(newFocusedTruncatingDelegate())
 	} else {
 		c.list.SetDelegate(newFocusedAgeDelegate())
 	}
@@ -102,7 +110,7 @@ func (c *column) Blur() {
 	c.focus = false
 	c.confirmDelete = false
 	if c.index == colDone {
-		c.list.SetDelegate(newBlurredDelegate())
+		c.list.SetDelegate(newBlurredTruncatingDelegate())
 	} else {
 		c.list.SetDelegate(newBlurredAgeDelegate())
 	}
@@ -298,10 +306,7 @@ func (c *column) ViewVertical(termWidth int) string {
 		if maxTitle < 10 {
 			maxTitle = 10
 		}
-		title := cd.issue.Title
-		if len([]rune(title)) > maxTitle {
-			title = string([]rune(title)[:maxTitle-1]) + "…"
-		}
+		title := truncateTitleForWidth(cd.issue.Title, maxTitle)
 
 		priorityTag := fmt.Sprintf("[P%d]", cd.issue.Priority)
 		line := fmt.Sprintf("  %-*s %s", maxTitle, title, priorityTag)
@@ -444,6 +449,41 @@ var (
 	staleTitleColor = lipgloss.Color("202")
 )
 
+// ellipsis is the three-dot suffix appended to truncated card titles.
+// ASCII dots are used instead of the unicode "…" glyph to stay
+// monospace-safe across all terminal fonts.
+const ellipsis = "..."
+
+// renderedCard wraps a card to override the Title() returned to the delegate,
+// allowing title truncation at render time without mutating the underlying data.
+// FilterValue() still returns the original title for search purposes.
+type renderedCard struct {
+	card
+	truncatedTitle string
+}
+
+func (r renderedCard) Title() string { return r.truncatedTitle }
+
+// truncateTitleForWidth returns a title truncated to fit within maxCols display
+// columns. If the title fits, it is returned unchanged. If it needs truncation,
+// it is cut to (maxCols - len(ellipsis)) columns and the ellipsis is appended.
+// ansi.Truncate is used so ANSI escape sequences and wide characters are handled
+// correctly.
+func truncateTitleForWidth(title string, maxCols int) string {
+	if maxCols <= 0 {
+		return title
+	}
+	width := ansi.StringWidth(title)
+	if width <= maxCols {
+		return title
+	}
+	cutWidth := maxCols - len(ellipsis)
+	if cutWidth <= 0 {
+		return ellipsis[:maxCols]
+	}
+	return ansi.Truncate(title, cutWidth, "") + ellipsis
+}
+
 // ageAwareDelegate wraps list.DefaultDelegate and overrides title color
 // per-item based on how long each card has sat in its column.
 type ageAwareDelegate struct {
@@ -455,6 +495,12 @@ type ageAwareDelegate struct {
 // Fresh unblocked cards use the delegate's built-in styles unchanged.
 // Aging/stale cards have their title foreground overridden while preserving
 // all other style properties (padding, border, selection indicator).
+//
+// Title truncation is applied here so the ellipsis is always "..." (three ASCII
+// dots) rather than the "…" unicode glyph that DefaultDelegate.Render appends.
+// The item is wrapped in renderedCard so the truncated title is what
+// DefaultDelegate.Render receives — the original title is left untouched for
+// filter/search purposes.
 func (d ageAwareDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	cd, ok := item.(card)
 	if !ok {
@@ -478,9 +524,15 @@ func (d ageAwareDelegate) Render(w io.Writer, m list.Model, index int, item list
 		local.Styles.DimmedDesc = local.Styles.DimmedDesc.Faint(true)
 	}
 
+	// Pre-truncate the title so DefaultDelegate.Render won't need to clip it,
+	// and so our "..." suffix is used instead of the default "…" glyph.
+	textwidth := m.Width() - local.Styles.NormalTitle.GetPaddingLeft() - local.Styles.NormalTitle.GetPaddingRight()
+	truncated := truncateTitleForWidth(cd.issue.Title, textwidth)
+	renderItem := renderedCard{card: cd, truncatedTitle: truncated}
+
 	bucket := cardAgeBucket(cd.issue.UpdatedAt)
 	if bucket == ageFresh {
-		local.Render(w, m, index, item)
+		local.Render(w, m, index, renderItem)
 		return
 	}
 
@@ -495,7 +547,7 @@ func (d ageAwareDelegate) Render(w io.Writer, m list.Model, index int, item list
 	local.Styles.NormalTitle = local.Styles.NormalTitle.Foreground(tintColor)
 	local.Styles.SelectedTitle = local.Styles.SelectedTitle.Foreground(tintColor)
 	local.Styles.DimmedTitle = local.Styles.DimmedTitle.Foreground(tintColor)
-	local.Render(w, m, index, item)
+	local.Render(w, m, index, renderItem)
 }
 
 func newFocusedAgeDelegate() ageAwareDelegate {
@@ -504,6 +556,33 @@ func newFocusedAgeDelegate() ageAwareDelegate {
 
 func newBlurredAgeDelegate() ageAwareDelegate {
 	return ageAwareDelegate{DefaultDelegate: newBlurredDelegate()}
+}
+
+// truncatingDelegate wraps list.DefaultDelegate and pre-truncates card titles
+// with "..." before rendering. Used for columns (e.g. Done) that don't need
+// age-based tinting but still need consistent ellipsis style.
+type truncatingDelegate struct {
+	list.DefaultDelegate
+}
+
+// Render pre-truncates the card title with "..." then delegates to DefaultDelegate.
+func (d truncatingDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+	cd, ok := item.(card)
+	if !ok {
+		d.DefaultDelegate.Render(w, m, index, item)
+		return
+	}
+	textwidth := m.Width() - d.Styles.NormalTitle.GetPaddingLeft() - d.Styles.NormalTitle.GetPaddingRight()
+	truncated := truncateTitleForWidth(cd.issue.Title, textwidth)
+	d.DefaultDelegate.Render(w, m, index, renderedCard{card: cd, truncatedTitle: truncated})
+}
+
+func newFocusedTruncatingDelegate() truncatingDelegate {
+	return truncatingDelegate{DefaultDelegate: newFocusedDelegate()}
+}
+
+func newBlurredTruncatingDelegate() truncatingDelegate {
+	return truncatingDelegate{DefaultDelegate: newBlurredDelegate()}
 }
 
 // Styling
