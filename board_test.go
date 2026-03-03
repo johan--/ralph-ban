@@ -830,6 +830,146 @@ func TestHandleMove_ClearsErrorOnSuccess(t *testing.T) {
 	}
 }
 
+func TestHandleMove_CardLandsAtPrioritySortedPosition(t *testing.T) {
+	b := newTestBoard(t)
+
+	// Target column already has a P1 and P3 card.
+	p1 := makeIssue("bl-p1", "P1 Card", beadslite.StatusDoing)
+	p1.Priority = 1
+	p3 := makeIssue("bl-p3", "P3 Card", beadslite.StatusDoing)
+	p3.Priority = 3
+	b.cols[colDoing].SetItems([]list.Item{
+		card{issue: p1},
+		card{issue: p3},
+	})
+
+	// Move a P2 card from Todo into Doing — it should land between P1 and P3.
+	p2 := makeIssue("bl-p2", "P2 Card", beadslite.StatusTodo)
+	p2.Priority = 2
+	b.cols[colTodo].SetItems([]list.Item{card{issue: p2}})
+	b.focused = colTodo
+	b.cols[colTodo].Focus()
+
+	b.handleMove(moveMsg{
+		card:   card{issue: p2},
+		source: colTodo,
+		target: colDoing,
+	})
+
+	items := b.cols[colDoing].list.Items()
+	if len(items) != 3 {
+		t.Fatalf("doing has %d items after move, want 3", len(items))
+	}
+
+	// P1 should be first, P2 in the middle, P3 last.
+	if items[0].(card).issue.ID != "bl-p1" {
+		t.Errorf("doing[0] = %q, want bl-p1", items[0].(card).issue.ID)
+	}
+	if items[1].(card).issue.ID != "bl-p2" {
+		t.Errorf("doing[1] = %q, want bl-p2 (moved card at priority-sorted position)", items[1].(card).issue.ID)
+	}
+	if items[2].(card).issue.ID != "bl-p3" {
+		t.Errorf("doing[2] = %q, want bl-p3", items[2].(card).issue.ID)
+	}
+
+	// List cursor should point at the moved card (index 1), not the tail.
+	if b.cols[colDoing].list.Index() != 1 {
+		t.Errorf("cursor = %d after move, want 1 (moved card's sorted index)", b.cols[colDoing].list.Index())
+	}
+}
+
+func TestHandleMove_HighPriorityCardLandsAtTop(t *testing.T) {
+	b := newTestBoard(t)
+
+	// Target column has a P2 card.
+	p2 := makeIssue("bl-p2", "P2 Card", beadslite.StatusDoing)
+	p2.Priority = 2
+	b.cols[colDoing].SetItems([]list.Item{card{issue: p2}})
+
+	// Move a P0 card in — it should be first (highest priority).
+	p0 := makeIssue("bl-p0", "P0 Card", beadslite.StatusTodo)
+	p0.Priority = 0
+	b.cols[colTodo].SetItems([]list.Item{card{issue: p0}})
+	b.focused = colTodo
+	b.cols[colTodo].Focus()
+
+	b.handleMove(moveMsg{
+		card:   card{issue: p0},
+		source: colTodo,
+		target: colDoing,
+	})
+
+	items := b.cols[colDoing].list.Items()
+	if len(items) != 2 {
+		t.Fatalf("doing has %d items, want 2", len(items))
+	}
+	if items[0].(card).issue.ID != "bl-p0" {
+		t.Errorf("doing[0] = %q, want bl-p0 (P0 sorts to top)", items[0].(card).issue.ID)
+	}
+
+	// Cursor should follow the card to index 0.
+	if b.cols[colDoing].list.Index() != 0 {
+		t.Errorf("cursor = %d after move, want 0", b.cols[colDoing].list.Index())
+	}
+}
+
+func TestApplyUndoMove_CardLandsAtPrioritySortedPosition(t *testing.T) {
+	b := newTestBoard(t)
+
+	// The original column (Todo) already has P0 and P4 cards.
+	p0 := makeIssue("bl-p0", "P0 Card", beadslite.StatusTodo)
+	p0.Priority = 0
+	p4 := makeIssue("bl-p4", "P4 Card", beadslite.StatusTodo)
+	p4.Priority = 4
+	b.cols[colTodo].SetItems([]list.Item{
+		card{issue: p0},
+		card{issue: p4},
+	})
+
+	// The card being undone is currently in Doing.
+	p2 := makeIssue("bl-p2", "P2 Card", beadslite.StatusDoing)
+	p2.Priority = 2
+	b.cols[colDoing].SetItems([]list.Item{card{issue: p2}})
+	b.cols[b.focused].Blur()
+	b.focused = colDoing
+	b.cols[colDoing].Focus()
+
+	// Undo the move: card goes back from Doing to Todo.
+	b.undo.push(undoEntry{
+		kind: undoMove,
+		move: &moveMsg{
+			card:   card{issue: p2},
+			source: colTodo,
+			target: colDoing,
+		},
+	})
+
+	cmd := b.undoLast()
+	if cmd == nil {
+		t.Fatal("undoLast should return a persist command")
+	}
+
+	// Card should be back in Todo, sorted between P0 and P4.
+	todoItems := b.cols[colTodo].list.Items()
+	if len(todoItems) != 3 {
+		t.Fatalf("todo has %d items after undo, want 3", len(todoItems))
+	}
+	if todoItems[0].(card).issue.ID != "bl-p0" {
+		t.Errorf("todo[0] = %q, want bl-p0", todoItems[0].(card).issue.ID)
+	}
+	if todoItems[1].(card).issue.ID != "bl-p2" {
+		t.Errorf("todo[1] = %q, want bl-p2 (undone card at priority-sorted position)", todoItems[1].(card).issue.ID)
+	}
+	if todoItems[2].(card).issue.ID != "bl-p4" {
+		t.Errorf("todo[2] = %q, want bl-p4", todoItems[2].(card).issue.ID)
+	}
+
+	// Cursor should follow the card to index 1.
+	if b.cols[colTodo].list.Index() != 1 {
+		t.Errorf("cursor = %d after undo, want 1 (undone card's sorted index)", b.cols[colTodo].list.Index())
+	}
+}
+
 // --- handleSave ---
 
 func TestHandleSave_NilIssueReturnsNil(t *testing.T) {

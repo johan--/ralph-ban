@@ -556,12 +556,16 @@ func (b *board) applyColumnMove(cd card, result *moveResult) {
 
 	items := b.cols[result.target].list.Items()
 	items = append(items, cd)
+	sortByPriority(items)
 	b.cols[result.target].SetItems(items)
 
 	b.cols[b.focused].Blur()
 	b.focused = result.target
 	b.cols[b.focused].Focus()
-	b.cols[result.target].list.Select(len(items) - 1)
+	// Select the moved card at its priority-sorted position, not at the end.
+	if idx := findCardIndex(b.cols[result.target].list.Items(), result.cardID); idx >= 0 {
+		b.cols[result.target].list.Select(idx)
+	}
 	b.updatePan()
 	b.resizeColumns()
 }
@@ -644,13 +648,17 @@ func (b *board) applyUndoMove(lastMove *moveMsg) tea.Cmd {
 	lastMove.card.issue.Status = result.newStatus
 	srcItems := b.cols[result.target].list.Items()
 	srcItems = append(srcItems, lastMove.card)
+	sortByPriority(srcItems)
 	b.cols[result.target].SetItems(srcItems)
 
 	// Follow the card back to its original column
 	b.cols[b.focused].Blur()
 	b.focused = result.target
 	b.cols[b.focused].Focus()
-	b.cols[result.target].list.Select(len(srcItems) - 1)
+	// Select the undone card at its priority-sorted position, not at the end.
+	if idx := findCardIndex(b.cols[result.target].list.Items(), result.cardID); idx >= 0 {
+		b.cols[result.target].list.Select(idx)
+	}
 	b.updatePan()
 	b.resizeColumns()
 
