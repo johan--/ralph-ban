@@ -1,5 +1,5 @@
 ---
-name: worker
+name: rb-worker
 description: Implement a board card in a worktree. Spawned by orchestrator for parallel execution.
 model: sonnet
 color: green

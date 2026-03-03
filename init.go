@@ -104,7 +104,17 @@ func runInit(args []string) {
 		os.Exit(1)
 	}
 
-	// --- Step 5: Report results ---
+	// --- Step 5: Install agents for --agent discovery ---
+	// claude --agent <name> resolves through: .claude/agents/ > ~/.claude/agents/ > plugins.
+	// Plugin agents are only found for subagent dispatch (Agent tool), not for --agent.
+	// Copy agents to .claude/agents/ so `ralph-ban claude` (which passes --agent orchestrator)
+	// works in any project, not just repos that happen to have agents/ at their root.
+	if err := installAgents(filepath.Join(pluginDir, "agents"), ".claude/agents"); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to install agents: %v\n", err)
+		os.Exit(1)
+	}
+
+	// --- Step 6: Report results ---
 	fmt.Println("Initialized ralph-ban:")
 	fmt.Printf("  %s/          board configuration\n", ralphBanDir)
 	if configCreated {
@@ -122,6 +132,7 @@ func runInit(args []string) {
 		}
 	}
 	fmt.Printf("  %s/   hooks + agents extracted\n", pluginDir)
+	fmt.Printf("  .claude/agents/    agents installed for --agent discovery\n")
 
 	fmt.Println()
 	fmt.Println("Run 'ralph-ban' to open the board.")
@@ -130,19 +141,67 @@ func runInit(args []string) {
 	}
 }
 
+// installAgents copies agent markdown files from srcDir to destDir.
+// This bridges the gap between plugin agents (found by the Agent tool) and
+// --agent discovery (which only searches .claude/agents/ and ~/.claude/agents/).
+// Without this, `ralph-ban claude` (which passes --agent orchestrator) would
+// only work in repos that happen to have agents/ at their root.
+func installAgents(srcDir, destDir string) error {
+	entries, err := os.ReadDir(srcDir)
+	if err != nil {
+		return fmt.Errorf("read agents dir: %w", err)
+	}
+
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		return err
+	}
+
+	// Remove previously installed rb-* agents so renames don't leave stale files.
+	// Only our rb- namespace is touched — user agents are preserved.
+	if existing, err := os.ReadDir(destDir); err == nil {
+		for _, e := range existing {
+			if strings.HasPrefix(e.Name(), "rb-") && strings.HasSuffix(e.Name(), ".md") {
+				os.Remove(filepath.Join(destDir, e.Name()))
+			}
+		}
+	}
+
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(srcDir, e.Name()))
+		if err != nil {
+			return fmt.Errorf("read agent %s: %w", e.Name(), err)
+		}
+		if err := os.WriteFile(filepath.Join(destDir, e.Name()), data, 0644); err != nil {
+			return fmt.Errorf("write agent %s: %w", e.Name(), err)
+		}
+	}
+	return nil
+}
+
 // extractPlugin writes the embedded plugin files to destDir.
-// The embedded FS (pluginFS) contains .claude-plugin/, agents/, and hooks/ —
-// everything Claude Code needs to load the plugin via --plugin-dir.
+// The embedded FS (pluginFS) contains .claude-plugin/, _agents/, and hooks/.
+// _agents/ is remapped to agents/ in the output so the plugin has the standard
+// structure Claude Code expects. The underscore prefix in the source keeps agent
+// files out of Claude Code's discovery chain during development.
 //
-// Always overwrites existing files so re-init keeps hooks and agents in sync
-// with the binary version. config.json lives outside destDir and is never touched.
+// The entire destDir is removed first so files deleted between versions
+// (e.g. settings.json after hooks moved to hooks/hooks.json) don't linger.
+// This is safe because destDir is fully managed by ralph-ban — user
+// configuration lives in .ralph-ban/config.json, outside the plugin tree.
 func extractPlugin(destDir string) error {
+	os.RemoveAll(destDir)
+
 	return fs.WalkDir(pluginFS, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 
-		target := filepath.Join(destDir, path)
+		// Remap _agents/ → agents/ so the plugin output has the standard name.
+		outPath := strings.Replace(path, "_agents", "agents", 1)
+		target := filepath.Join(destDir, outPath)
 
 		if d.IsDir() {
 			return os.MkdirAll(target, 0755)

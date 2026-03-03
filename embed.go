@@ -8,5 +8,9 @@ import "embed"
 // The `all:` prefix is required for `.claude-plugin` because embed skips dot-prefixed
 // directories by default.
 //
-//go:embed all:.claude-plugin agents hooks
+// Agent source lives in `_agents/` (underscore prefix) to keep it out of Claude Code's
+// agent discovery chain. extractPlugin remaps `_agents/` → `agents/` in the output
+// so the plugin structure is correct.
+//
+//go:embed all:.claude-plugin _agents hooks
 var pluginFS embed.FS

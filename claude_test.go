@@ -21,7 +21,7 @@ func TestBuildClaudeArgs(t *testing.T) {
 		{
 			name: "defaults",
 			wantContains: []string{
-				"--agent", "orchestrator",
+				"--agent", "rb-orchestrator",
 				"State your role and mission",
 			},
 			wantAbsent: []string{

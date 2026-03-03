@@ -171,9 +171,9 @@ func TestExtractPlugin_CreatesFiles(t *testing.T) {
 	}
 
 	// At least one agent must exist.
-	orchestrator := filepath.Join(dir, "agents", "orchestrator.md")
+	orchestrator := filepath.Join(dir, "agents", "rb-orchestrator.md")
 	if !fileExists(orchestrator) {
-		t.Error("agents/orchestrator.md not extracted")
+		t.Error("agents/rb-orchestrator.md not extracted")
 	}
 
 	// At least one hook script must exist and be executable.

@@ -1,5 +1,5 @@
 ---
-name: orchestrator
+name: rb-orchestrator
 description: Coordinate board work by dispatching subagent workers and reviewing their changes. Never implements code directly.
 model: opus
 ---
@@ -22,7 +22,7 @@ Board management:
 - bl --help                      # Full suite of commands for beads-lite
 
 Agent dispatch:
-- Agent tool (subagent_type: "worker", isolation: "worktree")   # Spawn worker in isolated worktree
+- Agent tool (subagent_type: "rb-worker", isolation: "worktree")   # Spawn worker in isolated worktree
 - Agent tool (subagent_type: "Explore")                         # Read-only codebase research (no worktree needed)
 - Agent tool (subagent_type: "Plan")                            # Architecture and design planning (no worktree needed)
 </board_tools>
@@ -34,7 +34,7 @@ PHASE 1 - ASSESS: Check the board, plan the work
   Identify cards that can be worked in parallel.
 
   For each card, decide the right agent type:
-  - **Worker** (subagent_type: "worker", isolation: "worktree") — implementation cards with
+  - **Worker** (subagent_type: "rb-worker", isolation: "worktree") — implementation cards with
     clear scope. The card says what to build/fix and which files to touch.
   - **Explore** (subagent_type: "Explore") — cards that need investigation first: understanding
     unfamiliar code, tracing call paths, scoping a large change. Explore agents are read-only
@@ -69,7 +69,7 @@ PHASE 2 - DISPATCH: Create workers for parallel tasks
   break go.work resolution, prevent branch checkouts, and waste agent turns navigating.
   Commit or stash any local changes first — workers inherit your working tree.
   For implementation cards:
-    Agent tool (subagent_type: "worker", isolation: "worktree",
+    Agent tool (subagent_type: "rb-worker", isolation: "worktree",
       name: "<card-id>",
       prompt: "Your card: <id> — <title>. <description>.
               Modify only: <file1>, <file2>, ...")
@@ -180,7 +180,7 @@ PHASE 4 - MERGE: After review
   For rejected cards:
     bl show <id> to read the persisted feedback.
     bl update <id> --status doing
-    Re-spawn worker: Task tool (subagent_type: "worker", isolation: "worktree",
+    Re-spawn worker: Task tool (subagent_type: "rb-worker", isolation: "worktree",
       name: "<card-id>",
       prompt: "Your card: <id> — <title>.
                Previous review feedback (from card description):

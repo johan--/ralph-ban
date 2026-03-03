@@ -101,7 +101,7 @@ func buildClaudeArgs(model, prompt, resume string, passthrough []string) []strin
 	if resume != "" {
 		args = append(args, "--resume", resume)
 	} else {
-		args = append(args, "--agent", "orchestrator")
+		args = append(args, "--agent", "rb-orchestrator")
 	}
 
 	// Only pass --model when explicitly overriding the agent's default.
