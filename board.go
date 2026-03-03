@@ -755,7 +755,14 @@ func (b *board) handleSave(msg saveMsg) tea.Cmd {
 	col := statusToColumn[msg.issue.Status]
 	items := b.cols[col].list.Items()
 	items = append(items, card{issue: msg.issue})
+	sortByPriority(items)
 	b.cols[col].SetItems(items)
+
+	// Select the newly created card so the user sees it immediately.
+	if idx := findCardIndex(b.cols[col].list.Items(), msg.issue.ID); idx >= 0 {
+		b.cols[col].list.Select(idx)
+	}
+	b.resizeColumns()
 	return persistCreate(b.store, msg.issue)
 }
 

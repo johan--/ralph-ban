@@ -950,6 +950,68 @@ func TestHandleSave_CreateAddsToCorrectColumn(t *testing.T) {
 	}
 }
 
+func TestHandleSave_CreateSelectsNewCard(t *testing.T) {
+	b := newTestBoard(t)
+
+	// Pre-fill the todo column with an existing card so the cursor starts elsewhere.
+	existing := makeIssue("bl-existing", "Existing Card", beadslite.StatusTodo)
+	existing.Priority = 1
+	b.cols[colTodo].SetItems([]list.Item{card{issue: existing}})
+	b.cols[colTodo].list.Select(0)
+
+	// Create a new card with higher priority so it sorts before the existing one.
+	newIssue := makeIssue("bl-new", "New High Priority", beadslite.StatusTodo)
+	newIssue.Priority = 0
+	b.handleSave(saveMsg{issue: newIssue})
+
+	// Column should now have both cards.
+	items := b.cols[colTodo].list.Items()
+	if len(items) != 2 {
+		t.Fatalf("todo has %d items after create, want 2", len(items))
+	}
+
+	// P0 card should sort first.
+	if items[0].(card).issue.ID != "bl-new" {
+		t.Errorf("first card = %q after sort, want bl-new (P0)", items[0].(card).issue.ID)
+	}
+
+	// The newly created card should be selected (index 0 — sorted to top by priority).
+	selected := b.cols[colTodo].list.Index()
+	if selected != 0 {
+		t.Errorf("selected index = %d after create, want 0 (newly created P0 card)", selected)
+	}
+	selectedCard := b.cols[colTodo].list.Items()[selected].(card)
+	if selectedCard.issue.ID != "bl-new" {
+		t.Errorf("selected card ID = %q, want bl-new", selectedCard.issue.ID)
+	}
+}
+
+func TestHandleSave_CreateSelectsNewCard_AppendedAtEnd(t *testing.T) {
+	b := newTestBoard(t)
+
+	// Pre-fill with a higher-priority card.
+	existing := makeIssue("bl-high", "High Priority", beadslite.StatusTodo)
+	existing.Priority = 0
+	b.cols[colTodo].SetItems([]list.Item{card{issue: existing}})
+
+	// Create a lower-priority card — it sorts after the existing one.
+	newIssue := makeIssue("bl-low", "Low Priority", beadslite.StatusTodo)
+	newIssue.Priority = 3
+	b.handleSave(saveMsg{issue: newIssue})
+
+	items := b.cols[colTodo].list.Items()
+	if len(items) != 2 {
+		t.Fatalf("todo has %d items after create, want 2", len(items))
+	}
+
+	// New card should be selected even though it sorted to the end.
+	selected := b.cols[colTodo].list.Index()
+	selectedCard := items[selected].(card)
+	if selectedCard.issue.ID != "bl-low" {
+		t.Errorf("selected card ID = %q, want bl-low (newly created card)", selectedCard.issue.ID)
+	}
+}
+
 func TestHandleSave_ResetsViewToBoard(t *testing.T) {
 	b := newTestBoard(t)
 	b.view = viewForm
