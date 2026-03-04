@@ -13,6 +13,7 @@ Four invariants that shape every decision in this codebase:
 
 ## Architecture
 
+- `main.go` — CLI entry point. Routes subcommands (`init`, `claude`, `snapshot`, `version`, `update`) and falls through to the TUI. `var Version` is set via ldflags at build time.
 - `board.go` — Root tea.Model. Routes messages to overlays or columns based on a `boardView` enum. Cross-cutting messages (resize, refresh, suspend) are intercepted before overlay routing — without this, a resize arriving while the form is open would be silently dropped.
 - `column.go` — Wraps bubbles/list per kanban column. The wrapper exists because bubbles/list ships with global quit bindings, built-in filtering, and help that ralph-ban doesn't want. Without it, those would need re-disabling on every column construction.
 - `card.go` — Adapts beads-lite Issue to list.Item.
@@ -20,6 +21,19 @@ Four invariants that shape every decision in this codebase:
 - `store.go` — SQLite persistence via 2-second tick polling. Polling rather than fsnotify because SQLite WAL mode creates `-wal` and `-shm` files that confuse file watchers on macOS, and polling keeps the goroutine lifecycle trivial. Each refresh replaces all column items (no diffing — SQLite reads at this scale are sub-millisecond).
 - `keys.go` — Vim-style h/j/k/l with arrow key fallbacks. Both are bound so the board isn't hostile to non-vim users.
 - `messages.go` — Decoupled message types following the Elm architecture. Columns emit messages; the board routes them. No component holds a reference to another. This is what makes isolated overlays safe — a form can emit `saveMsg` without knowing board internals.
+- `init.go` — `ralph-ban init` bootstraps a project: creates `.ralph-ban/config.json`, `.beads-lite/beads.db`, extracts the embedded plugin, and installs agents for `--agent` discovery.
+- `claude.go` — `ralph-ban claude` launches a Claude Code orchestrator session with the right flags (`--agent`, `--plugin`, `--settings`).
+- `update.go` — `ralph-ban update` downloads latest releases of both ralph-ban and bl from GitHub, replaces the binaries, and refreshes the embedded plugin.
+- `config.go` — Reads `.ralph-ban/config.json` (WIP limits, project commands).
+- `embed.go` — `//go:embed` directive for `.claude-plugin/`, `_agents/`, and `hooks/` directories.
+- `snapshot.go` — `ralph-ban snapshot` exports board state as JSON or ASCII.
+- `dump.go` — `--dump` flag renders one TUI frame as JSON for testing.
+- `filter.go` — Card filtering overlay.
+- `deplink.go` — Dependency link overlay for connecting cards.
+- `resolution.go` — Close-card overlay with resolution choice (done/wontfix/duplicate).
+- `transforms.go` — Pure functions for card sorting, grouping, and layout math.
+- `theme.go` — Lipgloss styles and color constants.
+- `icons.go` — Unicode icons for priority and card type badges.
 
 Layout uses `panOffset` to slide a window of visible columns (`minColumnWidth=24`). Narrow terminals can't fit all 5, so the focused column is always kept in view. Offscreen columns stay in memory — no evict/reload on pan.
 
@@ -74,7 +88,7 @@ Workers have `permissionMode: bypassPermissions` set in their YAML frontmatter. 
 go.work workspace with `../beads-lite`. go.work rather than `replace` directives because go.work is local-only — `go.mod` points to the published version, so the repo builds correctly without the sibling directory.
 
 ```
-go build ./...    # build
+just build        # build with version from VERSION file
 go run .          # run TUI (requires bl init first)
 ```
 
@@ -91,6 +105,19 @@ GOWORK=off go vet ./...
 This uses go.mod's published dependency versions instead of the local workspace.
 
 SQLite via ncruces/go-sqlite3 (wazero WebAssembly runtime) — no CGo toolchain dependency.
+
+### Releasing
+
+Version lives in `VERSION` (semver, no `v` prefix). The Justfile has `bump` and `release` recipes:
+
+```
+just bump patch    # 0.5.0 -> 0.5.1, stages VERSION
+just release       # commit, tag, push, create GitHub release
+```
+
+goreleaser (`.goreleaser.yaml`) runs via GitHub Actions (`.github/workflows/release.yml`) on tag push. It builds darwin/linux amd64/arm64 binaries with version embedded via `-X main.Version`.
+
+Users update via `ralph-ban update`, which downloads latest releases of both ralph-ban and bl from GitHub.
 
 ### Dependencies
 
