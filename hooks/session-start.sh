@@ -175,7 +175,6 @@ fi
 # bl-beot: Build user-visible summary — compact board state at a glance.
 # Shows total counts by status and flags any P0 urgency. 1-2 lines max.
 # Avoids dispatch nudges (agent-only) and doesn't repeat what `bl ready` shows.
-total_ready=$((doing_count + review_count + todo_count))
 if [ "$p0_total" -gt 0 ]; then
   p0_signal=" [${p0_total} P0]"
 else
