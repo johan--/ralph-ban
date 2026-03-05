@@ -29,7 +29,7 @@ func TestNewDepLinker_ExcludesSelf(t *testing.T) {
 		makeIssue("bl-003", "Gamma", beadslite.StatusTodo),
 	}
 
-	d := newDepLinker(issues, "bl-002", depModeBlockedBy)
+	d := newDepLinker(issues, "bl-002", depModeBlockedBy, true)
 	items := listItems(d)
 
 	for _, item := range items {
@@ -46,7 +46,7 @@ func TestNewDepLinker_ExcludesDoneCards(t *testing.T) {
 		makeIssue("bl-003", "Also active", beadslite.StatusDoing),
 	}
 
-	d := newDepLinker(issues, "bl-999", depModeBlocks)
+	d := newDepLinker(issues, "bl-999", depModeBlocks, true)
 	items := listItems(d)
 
 	for _, item := range items {
@@ -65,7 +65,7 @@ func TestNewDepLinker_IncludesOtherActiveCards(t *testing.T) {
 		makeIssue("bl-005", "Focused", beadslite.StatusTodo),
 	}
 
-	d := newDepLinker(issues, "bl-005", depModeBlockedBy)
+	d := newDepLinker(issues, "bl-005", depModeBlockedBy, true)
 	items := listItems(d)
 
 	// bl-001, bl-002, bl-003, bl-004 should all be present; bl-005 excluded as focused
@@ -86,7 +86,7 @@ func TestNewDepLinker_IncludesOtherActiveCards(t *testing.T) {
 }
 
 func TestNewDepLinker_EmptyIssues(t *testing.T) {
-	d := newDepLinker(nil, "bl-001", depModeBlockedBy)
+	d := newDepLinker(nil, "bl-001", depModeBlockedBy, true)
 	items := listItems(d)
 
 	if len(items) != 0 {
@@ -101,7 +101,7 @@ func TestNewDepLinker_OnlySelfAndDone(t *testing.T) {
 		makeIssue("bl-002", "Done", beadslite.StatusDone),
 	}
 
-	d := newDepLinker(issues, "bl-001", depModeBlocks)
+	d := newDepLinker(issues, "bl-001", depModeBlocks, true)
 	items := listItems(d)
 
 	if len(items) != 0 {
@@ -211,12 +211,12 @@ func TestNewDepLinker_ListTitleMatchesMode(t *testing.T) {
 		makeIssue("bl-001", "Alpha", beadslite.StatusTodo),
 	}
 
-	dBlockedBy := newDepLinker(issues, "bl-999", depModeBlockedBy)
+	dBlockedBy := newDepLinker(issues, "bl-999", depModeBlockedBy, true)
 	if dBlockedBy.list.Title != "Blocked by which card?" {
 		t.Errorf("list title = %q, want 'Blocked by which card?'", dBlockedBy.list.Title)
 	}
 
-	dBlocks := newDepLinker(issues, "bl-999", depModeBlocks)
+	dBlocks := newDepLinker(issues, "bl-999", depModeBlocks, true)
 	if dBlocks.list.Title != "Blocks which card?" {
 		t.Errorf("list title = %q, want 'Blocks which card?'", dBlocks.list.Title)
 	}
@@ -227,14 +227,14 @@ func TestNewDepLinker_FocusedIDStored(t *testing.T) {
 		makeIssue("bl-001", "Alpha", beadslite.StatusTodo),
 	}
 
-	d := newDepLinker(issues, "bl-001", depModeBlockedBy)
+	d := newDepLinker(issues, "bl-001", depModeBlockedBy, true)
 	if d.focusedID != "bl-001" {
 		t.Errorf("focusedID = %q, want bl-001", d.focusedID)
 	}
 }
 
 func TestNewDepLinker_ModeStored(t *testing.T) {
-	d := newDepLinker(nil, "bl-001", depModeBlocks)
+	d := newDepLinker(nil, "bl-001", depModeBlocks, true)
 	if d.mode != depModeBlocks {
 		t.Errorf("mode = %d, want depModeBlocks", d.mode)
 	}

@@ -71,18 +71,21 @@ type column struct {
 	// sortReversed is true when the Done column is sorted in reverse order
 	// (newest first). Only meaningful for colDone; ignored on other columns.
 	sortReversed bool
+	// isDark tracks terminal background brightness so delegates can use the
+	// correct light/dark style variants when rebuilt on Focus/Blur.
+	isDark bool
 }
 
-func newColumn(idx columnIndex) column {
+func newColumn(idx columnIndex, isDark bool) column {
 	// Start with blurred delegate so unfocused columns never show
 	// selection highlights. The board calls Focus() on column 0.
 	// Use truncating delegates from the start so titles are never rendered
 	// without ellipsis, even before the first Focus/Blur call.
 	var delegate list.ItemDelegate
 	if idx == colDone {
-		delegate = newBlurredTruncatingDelegate()
+		delegate = newBlurredTruncatingDelegate(isDark)
 	} else {
-		delegate = newBlurredAgeDelegate()
+		delegate = newBlurredAgeDelegate(isDark)
 	}
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.Title = columnTitles[idx]
@@ -92,17 +95,18 @@ func newColumn(idx columnIndex) column {
 	l.DisableQuitKeybindings()
 
 	return column{
-		index: idx,
-		list:  l,
+		index:  idx,
+		list:   l,
+		isDark: isDark,
 	}
 }
 
 func (c *column) Focus() {
 	c.focus = true
 	if c.index == colDone {
-		c.list.SetDelegate(newFocusedTruncatingDelegate())
+		c.list.SetDelegate(newFocusedTruncatingDelegate(c.isDark))
 	} else {
-		c.list.SetDelegate(newFocusedAgeDelegate())
+		c.list.SetDelegate(newFocusedAgeDelegate(c.isDark))
 	}
 }
 
@@ -110,9 +114,9 @@ func (c *column) Blur() {
 	c.focus = false
 	c.confirmDelete = false
 	if c.index == colDone {
-		c.list.SetDelegate(newBlurredTruncatingDelegate())
+		c.list.SetDelegate(newBlurredTruncatingDelegate(c.isDark))
 	} else {
-		c.list.SetDelegate(newBlurredAgeDelegate())
+		c.list.SetDelegate(newBlurredAgeDelegate(c.isDark))
 	}
 }
 
@@ -508,15 +512,16 @@ func (d ageAwareDelegate) Render(w io.Writer, m list.Model, index int, item list
 	// the shared delegate state across multiple Render calls.
 	local := d.DefaultDelegate
 
-	// Blocked cards: apply faint/dim styling so they visually recede.
-	// This is layered on top of any age tinting applied below.
+	// Blocked cards: dim with an explicit foreground color so they visually
+	// recede on both light and dark backgrounds. Faint(true) is avoided because
+	// the ANSI dim attribute is terminal-dependent and invisible on some terminals.
 	if cd.blocked {
-		local.Styles.NormalTitle = local.Styles.NormalTitle.Faint(true)
-		local.Styles.NormalDesc = local.Styles.NormalDesc.Faint(true)
-		local.Styles.SelectedTitle = local.Styles.SelectedTitle.Faint(true)
-		local.Styles.SelectedDesc = local.Styles.SelectedDesc.Faint(true)
-		local.Styles.DimmedTitle = local.Styles.DimmedTitle.Faint(true)
-		local.Styles.DimmedDesc = local.Styles.DimmedDesc.Faint(true)
+		local.Styles.NormalTitle = local.Styles.NormalTitle.Foreground(colorFaint)
+		local.Styles.NormalDesc = local.Styles.NormalDesc.Foreground(colorFaint)
+		local.Styles.SelectedTitle = local.Styles.SelectedTitle.Foreground(colorFaint)
+		local.Styles.SelectedDesc = local.Styles.SelectedDesc.Foreground(colorFaint)
+		local.Styles.DimmedTitle = local.Styles.DimmedTitle.Foreground(colorFaint)
+		local.Styles.DimmedDesc = local.Styles.DimmedDesc.Foreground(colorFaint)
 	}
 
 	// Pre-truncate the title so DefaultDelegate.Render won't need to clip it,
@@ -545,12 +550,12 @@ func (d ageAwareDelegate) Render(w io.Writer, m list.Model, index int, item list
 	local.Render(w, m, index, renderItem)
 }
 
-func newFocusedAgeDelegate() ageAwareDelegate {
-	return ageAwareDelegate{DefaultDelegate: newFocusedDelegate()}
+func newFocusedAgeDelegate(isDark bool) ageAwareDelegate {
+	return ageAwareDelegate{DefaultDelegate: newFocusedDelegate(isDark)}
 }
 
-func newBlurredAgeDelegate() ageAwareDelegate {
-	return ageAwareDelegate{DefaultDelegate: newBlurredDelegate()}
+func newBlurredAgeDelegate(isDark bool) ageAwareDelegate {
+	return ageAwareDelegate{DefaultDelegate: newBlurredDelegate(isDark)}
 }
 
 // truncatingDelegate wraps list.DefaultDelegate and pre-truncates card titles
@@ -572,12 +577,12 @@ func (d truncatingDelegate) Render(w io.Writer, m list.Model, index int, item li
 	d.DefaultDelegate.Render(w, m, index, renderedCard{card: cd, truncatedTitle: truncated})
 }
 
-func newFocusedTruncatingDelegate() truncatingDelegate {
-	return truncatingDelegate{DefaultDelegate: newFocusedDelegate()}
+func newFocusedTruncatingDelegate(isDark bool) truncatingDelegate {
+	return truncatingDelegate{DefaultDelegate: newFocusedDelegate(isDark)}
 }
 
-func newBlurredTruncatingDelegate() truncatingDelegate {
-	return truncatingDelegate{DefaultDelegate: newBlurredDelegate()}
+func newBlurredTruncatingDelegate(isDark bool) truncatingDelegate {
+	return truncatingDelegate{DefaultDelegate: newBlurredDelegate(isDark)}
 }
 
 // Styling
@@ -606,8 +611,9 @@ func (c *column) getStyle() lipgloss.Style {
 
 // Delegate styling for focused vs blurred columns
 
-func newFocusedDelegate() list.DefaultDelegate {
+func newFocusedDelegate(isDark bool) list.DefaultDelegate {
 	d := list.NewDefaultDelegate()
+	d.Styles = list.NewDefaultItemStyles(isDark)
 	d.Styles.SelectedTitle = d.Styles.SelectedTitle.
 		Foreground(colorAccent).
 		BorderLeftForeground(colorAccent)
@@ -617,8 +623,9 @@ func newFocusedDelegate() list.DefaultDelegate {
 	return d
 }
 
-func newBlurredDelegate() list.DefaultDelegate {
+func newBlurredDelegate(isDark bool) list.DefaultDelegate {
 	d := list.NewDefaultDelegate()
+	d.Styles = list.NewDefaultItemStyles(isDark)
 	d.Styles.SelectedTitle = d.Styles.NormalTitle
 	d.Styles.SelectedDesc = d.Styles.NormalDesc
 	return d

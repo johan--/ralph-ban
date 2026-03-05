@@ -27,6 +27,9 @@ func (c card) Description() string {
 	if c.issue.AssignedTo != "" {
 		base += " @" + c.issue.AssignedTo
 	}
+	if checked, total := c.issue.SpecProgress(); total > 0 {
+		base += fmt.Sprintf(" %d/%d", checked, total)
+	}
 	if c.blocked {
 		lock := lipgloss.NewStyle().Foreground(colorIconLock).Render(iconLock)
 		return lock + "  " + base

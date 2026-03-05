@@ -3,11 +3,12 @@ package main
 import (
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	beadslite "github.com/kylesnowschwartz/beads-lite"
 )
 
 func TestNewFormDefaults(t *testing.T) {
-	f := newForm(colTodo)
+	f := newForm(colTodo, true)
 
 	if f.priority != 2 {
 		t.Errorf("default priority = %d, want 2 (P2 medium)", f.priority)
@@ -32,7 +33,7 @@ func TestEditFormPreservesFields(t *testing.T) {
 	issue.Type = beadslite.IssueTypeFeature
 	issue.Description = "some details"
 
-	f := editForm(issue, colDoing)
+	f := editForm(issue, colDoing, true)
 
 	if f.title.Value() != "test card" {
 		t.Errorf("title = %q, want %q", f.title.Value(), "test card")
@@ -49,9 +50,9 @@ func TestEditFormPreservesFields(t *testing.T) {
 }
 
 func TestAdvanceFocusWraps(t *testing.T) {
-	f := newForm(colTodo)
+	f := newForm(colTodo, true)
 
-	// Forward through all fields: title -> description -> priority -> type -> title
+	// Forward through all fields: title -> description -> priority -> type -> specs -> title
 	f.advanceFocus(1)
 	if f.focus != fieldDescription {
 		t.Errorf("after tab 1: focus = %d, want fieldDescription", f.focus)
@@ -65,19 +66,23 @@ func TestAdvanceFocusWraps(t *testing.T) {
 		t.Errorf("after tab 3: focus = %d, want fieldType", f.focus)
 	}
 	f.advanceFocus(1)
+	if f.focus != fieldSpecs {
+		t.Errorf("after tab 4: focus = %d, want fieldSpecs", f.focus)
+	}
+	f.advanceFocus(1)
 	if f.focus != fieldTitle {
-		t.Errorf("after tab 4: focus = %d, want fieldTitle (wrapped)", f.focus)
+		t.Errorf("after tab 5: focus = %d, want fieldTitle (wrapped)", f.focus)
 	}
 
 	// Backward wraps too
 	f.advanceFocus(-1)
-	if f.focus != fieldType {
-		t.Errorf("after shift-tab: focus = %d, want fieldType", f.focus)
+	if f.focus != fieldSpecs {
+		t.Errorf("after shift-tab: focus = %d, want fieldSpecs", f.focus)
 	}
 }
 
 func TestAdvanceFocusBlursTextComponents(t *testing.T) {
-	f := newForm(colTodo)
+	f := newForm(colTodo, true)
 
 	// Title starts focused
 	if !f.title.Focused() {
@@ -101,7 +106,7 @@ func TestAdvanceFocusBlursTextComponents(t *testing.T) {
 }
 
 func TestSubmitNewIncludesDescription(t *testing.T) {
-	f := newForm(colTodo)
+	f := newForm(colTodo, true)
 	f.title.SetValue("New task")
 	f.description.SetValue("detailed explanation")
 
@@ -127,7 +132,7 @@ func TestSubmitEditIncludesDescription(t *testing.T) {
 	issue := beadslite.NewIssue("original")
 	issue.Description = "old desc"
 
-	f := editForm(issue, colDoing)
+	f := editForm(issue, colDoing, true)
 	f.description.SetValue("updated desc")
 
 	cmd := f.submit()
@@ -146,7 +151,7 @@ func TestSubmitEditIncludesDescription(t *testing.T) {
 }
 
 func TestPriorityBounds(t *testing.T) {
-	f := newForm(colTodo)
+	f := newForm(colTodo, true)
 	f.priority = 0
 
 	// Can't go below 0
@@ -169,8 +174,110 @@ func TestPriorityBounds(t *testing.T) {
 	}
 }
 
+func TestEditFormPreservesSpecs(t *testing.T) {
+	issue := beadslite.NewIssue("spec card")
+	issue.Specifications = []beadslite.Spec{
+		{Text: "handles edge case", Checked: true},
+		{Text: "tests pass", Checked: false},
+	}
+
+	f := editForm(issue, colDoing, true)
+
+	if len(f.specs) != 2 {
+		t.Fatalf("specs len = %d, want 2", len(f.specs))
+	}
+	if f.specs[0].Text != "handles edge case" || !f.specs[0].Checked {
+		t.Errorf("specs[0] = %+v, want checked 'handles edge case'", f.specs[0])
+	}
+	if f.specs[1].Text != "tests pass" || f.specs[1].Checked {
+		t.Errorf("specs[1] = %+v, want unchecked 'tests pass'", f.specs[1])
+	}
+
+	// Mutating form specs should not affect the original issue.
+	f.specs[0].Checked = false
+	if !issue.Specifications[0].Checked {
+		t.Error("form spec mutation leaked to original issue")
+	}
+}
+
+func TestSubmitNewIncludesSpecs(t *testing.T) {
+	f := newForm(colTodo, true)
+	f.title.SetValue("Spec task")
+	f.specs = []beadslite.Spec{
+		{Text: "first spec", Checked: false},
+		{Text: "second spec", Checked: true},
+	}
+
+	cmd := f.submit()
+	if cmd == nil {
+		t.Fatal("submit should return a command")
+	}
+
+	msg := cmd()
+	sm, ok := msg.(saveMsg)
+	if !ok {
+		t.Fatalf("submit returned %T, want saveMsg", msg)
+	}
+	if len(sm.issue.Specifications) != 2 {
+		t.Fatalf("specs len = %d, want 2", len(sm.issue.Specifications))
+	}
+	if sm.issue.Specifications[1].Checked != true {
+		t.Error("second spec should be checked")
+	}
+}
+
+func TestSubmitEditIncludesSpecs(t *testing.T) {
+	issue := beadslite.NewIssue("original")
+	issue.Specifications = []beadslite.Spec{{Text: "old", Checked: false}}
+
+	f := editForm(issue, colDoing, true)
+	f.specs = []beadslite.Spec{
+		{Text: "old", Checked: true},
+		{Text: "new", Checked: false},
+	}
+
+	cmd := f.submit()
+	msg := cmd()
+	sm := msg.(saveMsg)
+	if len(sm.issue.Specifications) != 2 {
+		t.Fatalf("specs len = %d, want 2", len(sm.issue.Specifications))
+	}
+	if !sm.issue.Specifications[0].Checked {
+		t.Error("first spec should be checked after edit")
+	}
+}
+
+func TestSpecToggleViaUpdate(t *testing.T) {
+	issue := beadslite.NewIssue("toggle test")
+	issue.Specifications = []beadslite.Spec{
+		{Text: "first", Checked: false},
+		{Text: "second", Checked: false},
+	}
+
+	f := editForm(issue, colDoing, true)
+	f.focus = fieldSpecs
+	f.specIndex = 0
+
+	// Simulate space key via the full Update path
+	spaceMsg := tea.KeyPressMsg(tea.Key{Code: ' '})
+	f2, _ := f.Update(spaceMsg)
+
+	if !f2.specs[0].Checked {
+		t.Error("spec 0 should be checked after space toggle")
+	}
+	if f2.specs[1].Checked {
+		t.Error("spec 1 should remain unchecked")
+	}
+
+	// Toggle again to uncheck
+	f3, _ := f2.Update(spaceMsg)
+	if f3.specs[0].Checked {
+		t.Error("spec 0 should be unchecked after second toggle")
+	}
+}
+
 func TestTypeIndexWraps(t *testing.T) {
-	f := newForm(colTodo)
+	f := newForm(colTodo, true)
 	f.typeIndex = 0
 
 	// Wrap backward

@@ -21,4 +21,8 @@ const (
 	// Selector arrows used in the form, resolution picker, and any cycle widget.
 	iconSelectorLeft  = "◀"
 	iconSelectorRight = "▶"
+
+	// Spec checklist icons — compact toggle indicators for specifications.
+	iconSpecChecked   = "󰄵" // nf-md-checkbox_marked
+	iconSpecUnchecked = "󰄱" // nf-md-checkbox_blank_outline
 )

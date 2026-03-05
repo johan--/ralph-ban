@@ -89,7 +89,7 @@ func TestNumColumns(t *testing.T) {
 }
 
 func TestNewColumnStartsBlurred(t *testing.T) {
-	c := newColumn(colTodo)
+	c := newColumn(colTodo, true)
 
 	if c.Focused() {
 		t.Error("newColumn should start blurred (not focused)")
@@ -97,7 +97,7 @@ func TestNewColumnStartsBlurred(t *testing.T) {
 }
 
 func TestFocusBlurSwapsDelegate(t *testing.T) {
-	c := newColumn(colDoing)
+	c := newColumn(colDoing, true)
 
 	c.Focus()
 	if !c.Focused() {
@@ -111,7 +111,7 @@ func TestFocusBlurSwapsDelegate(t *testing.T) {
 }
 
 func TestConfirmDeleteResetsOnBlur(t *testing.T) {
-	c := newColumn(colTodo)
+	c := newColumn(colTodo, true)
 	c.Focus()
 	c.confirmDelete = true
 
@@ -216,8 +216,8 @@ func TestAgeAwareDelegateFreshUsesDefaultColors(t *testing.T) {
 	cd := makeCard(time.Now().Add(-1 * time.Hour))
 	m := makeListModel(cd)
 
-	defaultDel := newBlurredDelegate()
-	ageDel := newBlurredAgeDelegate()
+	defaultDel := newBlurredDelegate(true)
+	ageDel := newBlurredAgeDelegate(true)
 
 	var defaultBuf, ageBuf bytes.Buffer
 	defaultDel.Render(&defaultBuf, m, 0, cd)
@@ -235,7 +235,7 @@ func TestAgeAwareDelegateAgingCardDiffersFromFresh(t *testing.T) {
 	agingCard := makeCard(time.Now().Add(-48 * time.Hour))
 	m := makeListModel(freshCard)
 
-	ageDel := newBlurredAgeDelegate()
+	ageDel := newBlurredAgeDelegate(true)
 
 	var freshBuf, agingBuf bytes.Buffer
 	ageDel.Render(&freshBuf, m, 0, freshCard)
@@ -253,7 +253,7 @@ func TestAgeAwareDelegateStaleCardDiffersFromAging(t *testing.T) {
 	staleCard := makeCard(time.Now().Add(-5 * 24 * time.Hour))
 	m := makeListModel(agingCard)
 
-	ageDel := newBlurredAgeDelegate()
+	ageDel := newBlurredAgeDelegate(true)
 
 	var agingBuf, staleBuf bytes.Buffer
 	ageDel.Render(&agingBuf, m, 0, agingCard)
@@ -271,7 +271,7 @@ func TestDoneColumnUsesNoAgingDelegate(t *testing.T) {
 	staleCard := makeCard(time.Now().Add(-10 * 24 * time.Hour))
 	freshCard := makeCard(time.Now().Add(-1 * time.Hour))
 
-	plainDel := newFocusedDelegate()
+	plainDel := newFocusedDelegate(true)
 	m := makeListModel(staleCard)
 
 	var staleBuf, freshBuf bytes.Buffer
@@ -290,8 +290,8 @@ func TestDoneColumnFocusDoesNotProduceAgeTint(t *testing.T) {
 	staleCard := makeCard(time.Now().Add(-10 * 24 * time.Hour))
 	m := makeListModel(staleCard)
 
-	plainDel := newFocusedDelegate()
-	ageDel := newFocusedAgeDelegate()
+	plainDel := newFocusedDelegate(true)
+	ageDel := newFocusedAgeDelegate(true)
 
 	var plainBuf, ageBuf bytes.Buffer
 	plainDel.Render(&plainBuf, m, 0, staleCard)
@@ -374,7 +374,7 @@ func TestTruncatingDelegateTruncatesLongTitle(t *testing.T) {
 	}}
 	m := makeListModel(cd) // width=40
 
-	del := newBlurredTruncatingDelegate()
+	del := newBlurredTruncatingDelegate(true)
 	var buf bytes.Buffer
 	del.Render(&buf, m, 0, cd)
 	rendered := buf.String()
@@ -394,7 +394,7 @@ func TestAgeAwareDelegateTruncatesLongTitle(t *testing.T) {
 	}}
 	m := makeListModel(cd) // width=40
 
-	del := newBlurredAgeDelegate()
+	del := newBlurredAgeDelegate(true)
 	var buf bytes.Buffer
 	del.Render(&buf, m, 0, cd)
 	rendered := buf.String()

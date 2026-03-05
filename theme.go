@@ -20,6 +20,7 @@ var (
 	colorIconFeature = lipgloss.Color("35")  // green (same as task — both are "work")
 	colorIconEpic    = lipgloss.Color("135") // purple
 	colorIconLock    = lipgloss.Color("243") // grey — subdued, informational
+	colorFaint       = lipgloss.Color("240") // dark grey — readable on both light and dark backgrounds
 )
 
 // Style builders.
@@ -28,8 +29,10 @@ var (
 // types that copy on assignment but share method-chained state.
 
 // styleFaint returns a dimmed style for secondary/disabled text.
+// Uses an explicit mid-grey rather than the ANSI "dim" attribute, which
+// is terminal-dependent and invisible on light backgrounds.
 func styleFaint() lipgloss.Style {
-	return lipgloss.NewStyle().Faint(true)
+	return lipgloss.NewStyle().Foreground(colorFaint)
 }
 
 // styleBold returns a bold style for emphasis.

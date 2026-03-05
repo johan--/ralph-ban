@@ -59,9 +59,9 @@ type board struct {
 	// (not just what's currently visible after a previous filter was applied).
 	// allBlockedIDs mirrors the blockedIDs from the latest refresh so the lock icon
 	// indicator is preserved when cycling filters between poll ticks.
-	filter        activeFilter
-	allIssues        []*beadslite.Issue
-	allBlockedIDs    map[string]bool
+	filter              activeFilter
+	allIssues           []*beadslite.Issue
+	allBlockedIDs       map[string]bool
 	lastFingerprint     uint64 // hash of issue set from last refresh; used to detect external changes
 	pendingLocalChanges int    // number of local writes not yet seen by a refresh; suppresses undo clear
 
@@ -79,6 +79,13 @@ type board struct {
 	// Toggled by the SortToggle keybinding while focused on the Done column.
 	// Not persisted — resets each session.
 	doneReversed bool
+
+	// isDark is true when the terminal has a dark background.
+	// Detected once at startup via tea.RequestBackgroundColor; defaults to true
+	// so the first frame renders correctly on the common case. Components use
+	// this to pick light vs dark style variants (e.g. textinput blurred text
+	// is white on dark terminals, dark grey on light ones).
+	isDark bool
 }
 
 func newBoard(store *beadslite.Store) *board {
@@ -86,9 +93,10 @@ func newBoard(store *beadslite.Store) *board {
 	// during the first render. Missing or malformed config is silently ignored.
 	wip := loadConfig(ralphBanDir)
 
+	isDark := true // safe default; overridden by BackgroundColorMsg
 	var cols [numColumns]column
 	for i := columnIndex(0); i < numColumns; i++ {
-		cols[i] = newColumn(i)
+		cols[i] = newColumn(i, isDark)
 		cols[i].wipLimit = wip.wipLimit(i)
 	}
 
@@ -108,6 +116,7 @@ func newBoard(store *beadslite.Store) *board {
 		help:        h,
 		searchInput: si,
 		wip:         wip,
+		isDark:      true, // safe default; overridden by BackgroundColorMsg
 	}
 	b.cols[b.focused].Focus()
 	return b
@@ -117,6 +126,7 @@ func (b *board) Init() tea.Cmd {
 	return tea.Batch(
 		b.loadFromStore(),
 		tickRefresh(b.store),
+		tea.RequestBackgroundColor,
 	)
 }
 
@@ -153,6 +163,11 @@ func (b *board) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case errMsg:
 		b.err = msg.err
+		return b, nil
+
+	case tea.BackgroundColorMsg:
+		b.isDark = msg.IsDark()
+		b.rebuildStyles()
 		return b, nil
 
 	case tea.ResumeMsg:
@@ -811,7 +826,7 @@ func (b *board) openDepLinker(mode depLinkMode) {
 	if !ok {
 		return
 	}
-	dl := newDepLinker(b.allIssues, cd.issue.ID, mode)
+	dl := newDepLinker(b.allIssues, cd.issue.ID, mode, b.isDark)
 	dl.width = b.termWidth
 	dl.height = b.termHeight
 	b.depLinker = &dl
@@ -904,7 +919,7 @@ func (b *board) moveFocus(delta int) {
 
 // openNewForm switches to form mode for creating a new card.
 func (b *board) openNewForm() {
-	f := newForm(b.focused)
+	f := newForm(b.focused, b.isDark)
 	f.width = b.termWidth
 	f.height = b.termHeight
 	b.form = &f
@@ -917,11 +932,32 @@ func (b *board) openEditForm() {
 	if !ok {
 		return
 	}
-	f := editForm(cd.issue, b.focused)
+	f := editForm(cd.issue, b.focused, b.isDark)
 	f.width = b.termWidth
 	f.height = b.termHeight
 	b.form = &f
 	b.view = viewForm
+}
+
+// rebuildStyles propagates the detected isDark value to all components.
+// Called once when tea.BackgroundColorMsg arrives; all subsequent delegate
+// construction (Focus/Blur) reads isDark from the column struct, so this
+// one-time push is sufficient.
+func (b *board) rebuildStyles() {
+	for i := range b.cols {
+		b.cols[i].isDark = b.isDark
+	}
+	// Re-set delegates so they pick up the new isDark value.
+	// Focus/Blur already rebuild delegates from c.isDark.
+	b.cols[b.focused].Focus()
+	for i := range b.cols {
+		if columnIndex(i) != b.focused {
+			b.cols[i].Blur()
+		}
+	}
+
+	// Rebuild search input styles.
+	b.searchInput.SetStyles(textinput.DefaultStyles(b.isDark))
 }
 
 // resolveBlockedBy returns the issues that block the given card.
@@ -1569,19 +1605,36 @@ func (b *board) zoomView() string {
 		)
 	}
 
+	// Specifications section
+	if len(i.Specifications) > 0 {
+		checked, total := i.SpecProgress()
+		specHeader := faintStyle.Render(fmt.Sprintf("Specifications (%d/%d)", checked, total))
+		var specLines []string
+		for _, spec := range i.Specifications {
+			mark := iconSpecUnchecked
+			if spec.Checked {
+				mark = iconSpecChecked
+			}
+			specLines = append(specLines, fmt.Sprintf("  %s %s", mark, spec.Text))
+		}
+		fields = lipgloss.JoinVertical(lipgloss.Left,
+			fields,
+			"",
+			specHeader,
+			strings.Join(specLines, "\n"),
+		)
+	}
+
 	fields = lipgloss.JoinVertical(lipgloss.Left,
 		fields,
 		"",
 		faintStyle.Render("e: edit  any key: dismiss"),
 	)
 
-	// Width is most of the terminal but not all, so the board edges remain visible.
-	panelWidth := b.termWidth * 3 / 4
+	// Use most of the terminal width so specs and descriptions have room to breathe.
+	panelWidth := b.termWidth - 8
 	if panelWidth < 40 {
 		panelWidth = 40
-	}
-	if panelWidth > b.termWidth-4 {
-		panelWidth = b.termWidth - 4
 	}
 
 	// Inner content width: subtract border (2) + padding (2*2).
@@ -1648,7 +1701,7 @@ func (b *board) handleZoomKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		issue := b.zoom.issue
 		colIdx := b.zoom.colIdx
 		b.zoom = nil
-		f := editForm(issue, colIdx)
+		f := editForm(issue, colIdx, b.isDark)
 		f.width = b.termWidth
 		f.height = b.termHeight
 		b.form = &f

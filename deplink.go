@@ -45,7 +45,7 @@ type depLinker struct {
 
 // newDepLinker builds a picker pre-populated with all issues except the focused card.
 // issues must be the full flat slice of all issues from the board cache.
-func newDepLinker(issues []*beadslite.Issue, focusedID string, mode depLinkMode) depLinker {
+func newDepLinker(issues []*beadslite.Issue, focusedID string, mode depLinkMode, isDark bool) depLinker {
 	var items []list.Item
 	for _, issue := range issues {
 		if issue.ID == focusedID {
@@ -59,6 +59,7 @@ func newDepLinker(issues []*beadslite.Issue, focusedID string, mode depLinkMode)
 	}
 
 	delegate := list.NewDefaultDelegate()
+	delegate.Styles = list.NewDefaultItemStyles(isDark)
 	delegate.SetHeight(1) // single-line items: ID + title only
 	// Disable the description line so items take one row each,
 	// fitting more cards in a compact picker.
