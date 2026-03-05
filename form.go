@@ -59,10 +59,11 @@ type form struct {
 	height      int
 
 	// Specs state
-	specs      []beadslite.Spec
-	specIndex  int // cursor within specs list
-	specInput  textinput.Model
-	addingSpec bool // true when the text input for a new spec is visible
+	specs       []beadslite.Spec
+	specIndex   int // cursor within specs list
+	specInput   textinput.Model
+	addingSpec  bool // true when the text input for a new spec is visible
+	editingSpec int  // index of spec being edited, or -1 when adding new
 
 	isDark bool // terminal background brightness; controls component style variants
 }
@@ -104,6 +105,7 @@ func newForm(colIdx columnIndex, isDark bool) form {
 		focus:       fieldTitle,
 		columnIndex: colIdx,
 		specInput:   newSpecInput(isDark),
+		editingSpec: -1,
 		isDark:      isDark,
 	}
 }
@@ -141,6 +143,7 @@ func editForm(issue *beadslite.Issue, colIdx columnIndex, isDark bool) form {
 		columnIndex: colIdx,
 		specs:       specs,
 		specInput:   newSpecInput(isDark),
+		editingSpec: -1,
 		isDark:      isDark,
 	}
 }
@@ -157,11 +160,19 @@ func (f form) Update(msg tea.Msg) (form, tea.Cmd) {
 		case key.Matches(msg, keys.Back):
 			return f, nil
 
-		case msg.String() == "tab":
+		case msg.String() == "tab", msg.String() == "down":
+			// Down arrow navigates fields except inside the description
+			// textarea (cursor movement) and specs list (item navigation).
+			if msg.String() == "down" && (f.focus == fieldDescription || f.focus == fieldSpecs) {
+				break
+			}
 			f.advanceFocus(1)
 			return f, nil
 
-		case msg.String() == "shift+tab":
+		case msg.String() == "shift+tab", msg.String() == "up":
+			if msg.String() == "up" && (f.focus == fieldDescription || f.focus == fieldSpecs) {
+				break
+			}
 			f.advanceFocus(-1)
 			return f, nil
 
@@ -238,8 +249,17 @@ func (f form) updateSpecs(msg tea.KeyMsg) (form, tea.Cmd) {
 	case msg.String() == "a":
 		// Start adding a new spec.
 		f.addingSpec = true
+		f.editingSpec = -1
 		f.specInput.SetValue("")
 		f.specInput.Focus()
+	case msg.String() == "e":
+		// Edit the selected spec.
+		if f.specIndex >= 0 && f.specIndex < len(f.specs) {
+			f.addingSpec = true
+			f.editingSpec = f.specIndex
+			f.specInput.SetValue(f.specs[f.specIndex].Text)
+			f.specInput.Focus()
+		}
 	case msg.String() == "d" || msg.String() == "backspace":
 		// Remove the selected spec.
 		if f.specIndex >= 0 && f.specIndex < len(f.specs) {
@@ -252,21 +272,28 @@ func (f form) updateSpecs(msg tea.KeyMsg) (form, tea.Cmd) {
 	return f, nil
 }
 
-// updateSpecInput handles key events while typing a new spec.
+// updateSpecInput handles key events while typing a new or edited spec.
 func (f form) updateSpecInput(msg tea.KeyMsg) (form, tea.Cmd) {
 	switch {
 	case msg.String() == "enter":
 		text := strings.TrimSpace(f.specInput.Value())
 		if text != "" {
-			f.specs = append(f.specs, beadslite.Spec{Text: text})
-			f.specIndex = len(f.specs) - 1
+			if f.editingSpec >= 0 && f.editingSpec < len(f.specs) {
+				// Replace existing spec text, preserving checked state.
+				f.specs[f.editingSpec].Text = text
+			} else {
+				f.specs = append(f.specs, beadslite.Spec{Text: text})
+				f.specIndex = len(f.specs) - 1
+			}
 		}
 		f.addingSpec = false
+		f.editingSpec = -1
 		f.specInput.Blur()
 		return f, nil
 
 	case key.Matches(msg, keys.Back):
 		f.addingSpec = false
+		f.editingSpec = -1
 		f.specInput.Blur()
 		return f, nil
 	}
@@ -363,14 +390,14 @@ func (f form) View() string {
 	specsView := f.viewSpecs(label, active, faint)
 
 	// Footer hint adapts to current field.
-	hint := "tab: next  enter: save  esc: cancel"
+	hint := "↑↓/tab: navigate  enter: save  esc: cancel"
 	if f.focus == fieldDescription {
-		hint = "tab: next  esc: cancel"
+		hint = "tab: next field  esc: cancel"
 	} else if f.focus == fieldSpecs {
 		if f.addingSpec {
 			hint = "enter: add  esc: cancel"
 		} else {
-			hint = "space: toggle  a: add  d: remove  tab: next  enter: save"
+			hint = "space: toggle  a: add  e: edit  d: remove  tab: next  enter: save"
 		}
 	}
 
@@ -408,6 +435,16 @@ func (f form) viewSpecs(label, active, faint lipgloss.Style) string {
 
 	var lines []string
 	for i, spec := range f.specs {
+		// When editing this spec inline, show the text input in place of the text.
+		if f.addingSpec && f.editingSpec == i {
+			mark := iconSpecUnchecked
+			if spec.Checked {
+				mark = iconSpecChecked
+			}
+			lines = append(lines, fmt.Sprintf("  %s %s", mark, f.specInput.View()))
+			continue
+		}
+
 		mark := iconSpecUnchecked
 		if spec.Checked {
 			mark = iconSpecChecked
@@ -419,7 +456,8 @@ func (f form) viewSpecs(label, active, faint lipgloss.Style) string {
 		lines = append(lines, line)
 	}
 
-	if f.addingSpec {
+	// New spec input appears at the bottom of the list (editingSpec == -1).
+	if f.addingSpec && f.editingSpec < 0 {
 		lines = append(lines, "  "+f.specInput.View())
 	}
 

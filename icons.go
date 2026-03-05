@@ -25,4 +25,7 @@ const (
 	// Spec checklist icons — compact toggle indicators for specifications.
 	iconSpecChecked   = "󰄵" // nf-md-checkbox_marked
 	iconSpecUnchecked = "󰄱" // nf-md-checkbox_blank_outline
+
+	// Position indicator dot — accent color marks the focused column.
+	iconDotFilled = "●"
 )
