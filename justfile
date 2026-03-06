@@ -126,6 +126,12 @@ release notes="":
         exit 1
     fi
 
+    # Verify the build works without go.work. CI (goreleaser) uses go.mod
+    # directly — if go.mod points to an old beads-lite version that lacks
+    # symbols we use, the release will fail. Catch it before tagging.
+    echo "Verifying GOWORK=off build..."
+    GOWORK=off go build ./... || { echo "Error: build fails without go.work. Update go.mod dependency versions."; exit 1; }
+
     # Commit, tag, push
     git commit -m "chore: bump version to $v"
     git tag "v$v"
