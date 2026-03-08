@@ -57,7 +57,8 @@ PHASE 1 - ASSESS: Check the board, plan the work
   - Has specifications (acceptance criteria the worker checks off)
   Cards without specs need them before dispatch — the review transition
   blocks on unchecked specs, so a specless card just defers the problem
-  to the worker. Add specs now: `bl update <id> --spec "criterion"`.
+  to the worker. Add specs in EARS notation now:
+  `bl update <id> --spec "When <trigger>, the <system> shall <response>"`.
 
   For each card, decide the right agent type:
   - **Worker** (subagent_type: "rb-worker", isolation: "worktree") — implementation cards with
@@ -108,11 +109,17 @@ PHASE 2 - DISPATCH: Create workers for parallel tasks
               Produce: step-by-step implementation plan with file scope.")
   After an Explore/Plan agent returns, update the card with findings:
     bl update <id> --description "<original description>\n\n## Investigation\n<findings>"
-  Then convert plan steps into specifications (acceptance criteria):
-    bl update <id> --spec "step 1 description" --spec "step 2 description" ...
-  Good specs are verifiable by the worker: "tests pass for X", "handles error Y",
-  "updates config Z". Avoid vague specs like "implement correctly" — if a worker
-  can't tell whether it's done, the spec isn't specific enough.
+  Then convert plan steps into specifications using EARS notation (Easy Approach
+  to Requirements Syntax). Each spec should follow one of these patterns:
+    - Ubiquitous:        The <system> shall <response>
+    - Event-driven:      When <trigger>, the <system> shall <response>
+    - State-driven:      While <precondition>, the <system> shall <response>
+    - Unwanted behavior: If <trigger>, then the <system> shall <response>
+    - Optional feature:  Where <feature is included>, the <system> shall <response>
+  Add specs via: bl update <id> --spec "When X, the system shall Y" --spec ...
+  EARS specs are testable by construction — a worker can read each one and know
+  exactly what to verify. Avoid vague specs like "implement correctly" or
+  "handle errors" — if a worker can't tell whether it's done, rewrite the spec.
   Re-assess whether the card is ready for a worker or needs further breakdown.
   Before spawning any worker, write the activity marker so the stop hook
   pauses cleanly while workers run:
@@ -284,10 +291,10 @@ You (the orchestrator) run with the user's permission level.
 - SHOULD respect WIP limits: finish in-progress work before starting new cards.
   When a column is at capacity, move lower-priority cards to backlog rather than
   forcing them through.
-- MUST add specifications to cards before dispatching workers. Specs are acceptance
-  criteria — workers check them off during implementation, and the CLI blocks the
-  review transition until all are checked. A card without specs passes the gate
-  vacuously, which defeats the purpose. Use --force only when deliberately
+- MUST add specifications in EARS notation before dispatching workers. Specs are
+  acceptance criteria — workers check them off during implementation, and the CLI
+  blocks the review transition until all are checked. A card without specs passes
+  the gate vacuously, which defeats the purpose. Use --force only when deliberately
   overriding (e.g., deferring a non-blocking spec to a follow-up card).
 - NEVER ask the user "Should I continue?", "Want me to proceed?", or equivalent in autonomous mode.
   The stop hook is the only arbiter of whether work is done. If it blocks, keep working.
